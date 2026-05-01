@@ -1,10 +1,21 @@
 package com.egesa.clinic.shared
 
+import kotlinx.serialization.Serializable
+
 enum class WorkflowArea {
     RECEPTION,
     CONSULTATION,
     DIAGNOSIS,
-    WARD,
+    WARDS,
+    ADMIN,
+    REPORTS,
+    SETTINGS
+}
+
+enum class UserRole {
+    RECEPTIONIST,
+    DOCTOR,
+    NURSE,
     ADMIN
 }
 
@@ -27,7 +38,66 @@ data class Patient(
 
 data class DashboardMetric(
     val title: String,
-    val value: String
+    val value: String,
+    val subtitle: String? = null
+)
+
+data class TrendPoint(
+    val label: String,
+    val value: Int
+)
+
+data class DepartmentMetric(
+    val department: String,
+    val throughput: Int,
+    val avgTurnaroundMinutes: Int
+)
+
+data class BottleneckCell(
+    val workflowStage: String,
+    val severity: String,
+    val pendingCount: Int
+)
+
+data class UserAccount(
+    val id: String,
+    val fullName: String,
+    val role: String,
+    val active: Boolean,
+    val passwordResetRequired: Boolean
+)
+
+data class AuditEvent(
+    val user: String,
+    val action: String,
+    val module: String,
+    val timestamp: String,
+    val contextReference: String
+)
+
+data class ConfigDictionary(
+    val title: String,
+    val entries: List<String>
+)
+
+@Serializable
+data class QueueItem(
+    val patientId: String,
+    val name: String,
+    val triageLevel: Int,
+    val waitMinutes: Int
+)
+
+@Serializable
+data class WardBed(
+    val bedId: String,
+    val wardName: String,
+    val occupiedBy: String? = null
+)
+
+data class CloudSyncConfig(
+    val baseUrl: String,
+    val anonKey: String
 )
 
 data class WardOverview(
@@ -79,10 +149,36 @@ class HospitalState {
 
     fun allPatients(): List<Patient> = patients.toList()
 
-    fun metrics(): List<DashboardMetric> = listOf(
-        DashboardMetric("Registered Today", patients.size.toString()),
-        DashboardMetric("In Wards", patients.count { it.assignedWard != null }.toString()),
-        DashboardMetric("Pending Consultation", patients.count { it.status.contains("consultation", true) }.toString())
+    fun adminKpis(): List<DashboardMetric> = listOf(
+        DashboardMetric("Registrations / Day", "126", "+8% vs yesterday"),
+        DashboardMetric("Consultation Throughput", "93", "patients completed"),
+        DashboardMetric("Avg Turnaround", "48 min", "triage → discharge"),
+        DashboardMetric("Ward Occupancy", "82%", "164 / 200 beds"),
+        DashboardMetric("Discharge Rate", "71%", "within 72 hours")
+    )
+
+    fun registrationTrend(): List<TrendPoint> = listOf(
+        TrendPoint("Mon", 104),
+        TrendPoint("Tue", 110),
+        TrendPoint("Wed", 122),
+        TrendPoint("Thu", 118),
+        TrendPoint("Fri", 126)
+    )
+
+    fun departmentComparison(): List<DepartmentMetric> = listOf(
+        DepartmentMetric("Emergency", 44, 37),
+        DepartmentMetric("Outpatient", 68, 44),
+        DepartmentMetric("Pediatrics", 39, 51),
+        DepartmentMetric("Maternity", 31, 56),
+        DepartmentMetric("Surgery", 22, 73)
+    )
+
+    fun bottleneckHeatmap(): List<BottleneckCell> = listOf(
+        BottleneckCell("Triage", "Medium", 9),
+        BottleneckCell("Consultation", "High", 17),
+        BottleneckCell("Lab", "Critical", 21),
+        BottleneckCell("Pharmacy", "Low", 4),
+        BottleneckCell("Discharge", "Medium", 11)
     )
 
     fun wardOverview(): WardOverview = WardOverview(

@@ -2,7 +2,8 @@ package com.egesa.clinic.shared
 
 /**
  * Platform-agnostic gateway for M-Pesa STK payment operations.
- * Implementations provide platform/network specific behavior.
+ *
+ * Shared code defines only the contract; platform/server modules provide concrete implementations.
  */
 interface MpesaGateway {
     suspend fun initiateStkPush(request: MpesaPaymentRequest): MpesaPaymentResult
@@ -10,18 +11,15 @@ interface MpesaGateway {
 }
 
 /**
- * Contract for persisting and retrieving payment records independently of storage backend.
+ * Platform-agnostic persistence contract for payment records.
+ *
+ * This contract intentionally avoids coupling to any specific database, ORM, or transport.
  */
 interface PaymentRepository {
     suspend fun savePayment(record: PaymentRecord)
-    suspend fun updatePaymentStatus(
-        checkoutRequestId: String,
-        status: PaymentStatus,
-        receiptNumber: String? = null,
-        resultCode: String? = null,
-        resultDescription: String? = null
-    )
+    suspend fun updatePayment(record: PaymentRecord)
 
+    suspend fun getPaymentById(id: String): PaymentRecord?
     suspend fun getPaymentByCheckoutRequestId(checkoutRequestId: String): PaymentRecord?
     suspend fun getPaymentByMerchantRequestId(merchantRequestId: String): PaymentRecord?
     suspend fun listPaymentsByPatientId(patientId: String): List<PaymentRecord>

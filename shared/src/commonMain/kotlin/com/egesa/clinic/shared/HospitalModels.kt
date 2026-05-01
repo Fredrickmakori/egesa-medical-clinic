@@ -176,6 +176,7 @@ class HospitalState {
 
     fun reconcilePendingStkRequests(checkStatus: (String) -> StkRequestStatus): Int {
         var updated = 0
+<<<<<<< codex/add-server-side-scheduled-status-reconciliation-8eg6mq
         for (index in paymentRecords.indices) {
             val record = paymentRecords[index]
             if (record.stkRequestId == null || record.stkStatus != StkRequestStatus.PENDING) {
@@ -187,6 +188,16 @@ class HospitalState {
             }
             updated += 1
             paymentRecords[index] = record.copy(
+=======
+        paymentRecords.replaceAll { record ->
+            if (record.stkRequestId == null || record.stkStatus != StkRequestStatus.PENDING) {
+                return@replaceAll record
+            }
+            val newStatus = checkStatus(record.stkRequestId)
+            if (newStatus == StkRequestStatus.PENDING) return@replaceAll record
+            updated += 1
+            record.copy(
+>>>>>>> main
                 stkStatus = newStatus,
                 synced = newStatus == StkRequestStatus.SUCCESS,
                 lastSyncedAt = Clock.System.now(),

@@ -1,27 +1,21 @@
 # Egesa Medical Clinic
 
-Kotlin Multiplatform hospital management starter targeting:
+Starter Kotlin Multiplatform hospital management app targeting:
 - Android
 - Desktop (Windows/Linux via JVM)
 
 ## Modules
-- `shared`: workflow models + in-memory operational state.
-- `desktop`: operator-focused dashboard with feature tabs for Reception, Consultation, Diagnosis, Ward, and Admin.
-- `androidApp`: mobile operational dashboard with tabbed workflow summaries and searchable patient list.
-
-## Implemented UI flows
-- Reception queue cards with triage and waiting-time indicators.
-- Consultation and diagnosis workbench lists with patient/clinician/diagnosis context.
-- Ward bed-board overview (occupied vs available beds).
-- Admin KPI cards for total registrations, pending consultation, admitted patients, and active clinicians.
-- Global patient search by ID/name.
+- `shared`: shared domain models and in-memory state container.
+- `desktop`: Compose Desktop app shell for reception, consultation, diagnosis, ward ops, and admin panel.
+- `androidApp`: Android app shell using Compose UI with the same feature tabs.
 
 ## Run
 - Desktop: `./gradlew :desktop:run`
-- Android build: `./gradlew :androidApp:assembleDebug`
+- Android: `./gradlew :androidApp:assembleDebug`
 
-## Next steps
-1. Persistence layer (Room or SQLDelight)
-2. Authentication and role-based permissions
-3. Multi-user synchronization API
-4. Report exports and analytics charts
+## Notes
+This is an initial scaffold focused on architecture and feature areas. Next steps:
+1. Persistence layer (SQLDelight/Room)
+2. Authentication/roles
+3. Networking/API for multi-user sync
+4. Report exports and dashboards

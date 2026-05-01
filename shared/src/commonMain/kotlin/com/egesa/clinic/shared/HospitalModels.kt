@@ -6,10 +6,33 @@ enum class WorkflowArea {
     RECEPTION,
     CONSULTATION,
     DIAGNOSIS,
-    WARD,
+    WARDS,
+    ADMIN,
+    REPORTS,
+    SETTINGS
+}
+
+enum class UserRole {
+    RECEPTIONIST,
+    DOCTOR,
+    NURSE,
     ADMIN
 }
 
+<<<<<<< codex/create-app-shell-frame-templates-and-navigation
+data class GlobalNavItem(
+    val area: WorkflowArea,
+    val label: String,
+    val visibleTo: Set<UserRole>,
+    val visibilityAnnotation: String
+)
+
+data class GlobalAction(
+    val id: String,
+    val label: String
+)
+
+=======
 object PatientStatus {
     const val WAITING = "WAITING"
     const val IN_CONSULTATION = "IN_CONSULTATION"
@@ -24,6 +47,7 @@ enum class StkRequestStatus {
 }
 
 @Serializable
+>>>>>>> main
 data class Patient(
     val id: String,
     val fullName: String,
@@ -324,8 +348,29 @@ class HospitalState {
     fun paymentRecordsByPatient(patientId: String): List<PaymentRecord> =
         paymentRecords.filter { it.patientId.equals(patientId, ignoreCase = true) }
 
+<<<<<<< codex/create-app-shell-frame-templates-and-navigation
+    private val navItems = listOf(
+        GlobalNavItem(WorkflowArea.RECEPTION, "Reception", setOf(UserRole.RECEPTIONIST, UserRole.ADMIN), "Receptionist (Reception)"),
+        GlobalNavItem(WorkflowArea.CONSULTATION, "Consultation", setOf(UserRole.DOCTOR, UserRole.ADMIN), "Doctor (Consultation)"),
+        GlobalNavItem(WorkflowArea.DIAGNOSIS, "Diagnosis", setOf(UserRole.DOCTOR, UserRole.ADMIN), "Doctor (Diagnosis)"),
+        GlobalNavItem(WorkflowArea.WARDS, "Wards", setOf(UserRole.NURSE, UserRole.ADMIN), "Nurse (Wards)"),
+        GlobalNavItem(WorkflowArea.ADMIN, "Admin", setOf(UserRole.ADMIN), "Admin (All + Reports/Settings)"),
+        GlobalNavItem(WorkflowArea.REPORTS, "Reports", setOf(UserRole.ADMIN), "Admin (All + Reports/Settings)"),
+        GlobalNavItem(WorkflowArea.SETTINGS, "Settings", setOf(UserRole.ADMIN), "Admin (All + Reports/Settings)")
+    )
+
+    private val globalActions = listOf(
+        GlobalAction("patient_search", "Patient Search"),
+        GlobalAction("quick_register", "Quick Register"),
+        GlobalAction("alerts_notifications", "Alerts/Notifications"),
+        GlobalAction("user_profile_switch_role", "User Profile / Switch Role")
+    )
+
+    fun allPatients(): List<Patient> = patients.toList()
+=======
     fun paymentRecordsByStatus(status: PaymentStatus): List<PaymentRecord> =
         paymentRecords.filter { it.status == status }
+>>>>>>> main
 
     fun adminKpis(): List<DashboardMetric> = listOf(
         DashboardMetric("Registrations / Day", "126", "+8% vs yesterday"),
@@ -378,4 +423,10 @@ class HospitalState {
         ConfigDictionary("Billing Categories", listOf("Consultation", "Laboratory", "Imaging", "Procedure", "Medication")),
         ConfigDictionary("Status Dictionaries", listOf("Awaiting Consultation", "In Diagnosis", "Admitted", "Ready for Discharge", "Discharged"))
     )
+
+    fun globalNavItemsFor(role: UserRole): List<GlobalNavItem> = navItems.filter { role in it.visibleTo }
+
+    fun globalActions(): List<GlobalAction> = globalActions.toList()
+
+    fun breadcrumbFor(area: WorkflowArea): List<String> = listOf("Home", area.name.lowercase().replaceFirstChar { it.uppercase() }, "Workflow")
 }

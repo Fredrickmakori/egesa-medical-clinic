@@ -1,33 +1,21 @@
 # Egesa Medical Clinic
 
-Kotlin Multiplatform hospital management starter targeting:
+Starter Kotlin Multiplatform hospital management app targeting:
 - Android
 - Desktop (Windows/Linux via JVM)
-- Ktor server API (client-server architecture)
 
 ## Modules
-- `shared`: workflow models + in-memory operational state.
-- `desktop`: operator-focused dashboard with feature tabs for Reception, Consultation, Diagnosis, Ward, and Admin.
-- `androidApp`: mobile operational dashboard with tabbed workflow summaries and searchable patient list.
-- `server`: Ktor backend exposing patient, queue, bed, and metrics APIs for remote retrieval/backups.
-
-## Implemented client-server and cloud-backup foundation
-- REST API endpoints: `/health`, `/patients`, `/queue`, `/beds`, `/metrics`.
-- Shared `RecordSyncClient` interface + `CloudSyncConfig` contract for Supabase-compatible synchronization.
-- Supabase SQL schema and security policies under `infra/supabase/schema.sql`.
+- `shared`: shared domain models and in-memory state container.
+- `desktop`: Compose Desktop app shell for reception, consultation, diagnosis, ward ops, and admin panel.
+- `androidApp`: Android app shell using Compose UI with the same feature tabs.
 
 ## Run
 - Desktop: `./gradlew :desktop:run`
-- Android build: `./gradlew :androidApp:assembleDebug`
-- Server API: `./gradlew :server:run`
+- Android: `./gradlew :androidApp:assembleDebug`
 
-## Supabase setup
-1. Create a Supabase project.
-2. Run `infra/supabase/schema.sql` in Supabase SQL editor.
-3. Store project URL + anon key and wire into your platform sync client implementation.
-
-## Next steps
-1. Implement concrete `RecordSyncClient` on desktop/android (Ktor client).
-2. Background job for autonomous uploads (WorkManager on Android, scheduler on desktop/server).
-3. Authentication and role-based permissions.
-4. Report exports and analytics charts.
+## Notes
+This is an initial scaffold focused on architecture and feature areas. Next steps:
+1. Persistence layer (SQLDelight/Room)
+2. Authentication/roles
+3. Networking/API for multi-user sync
+4. Report exports and dashboards

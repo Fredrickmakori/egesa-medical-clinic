@@ -1,8 +1,5 @@
 package com.egesa.clinic.shared
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 enum class WorkflowArea {
     RECEPTION,
     CONSULTATION,
@@ -11,29 +8,15 @@ enum class WorkflowArea {
     ADMIN
 }
 
-@Serializable
-enum class PatientStatus {
-    WAITING,
-    IN_CONSULTATION,
-    IN_DIAGNOSIS,
-    ADMITTED,
-    DISCHARGED
-}
-
-@Serializable
 data class Patient(
     val id: String,
     val fullName: String,
     val age: Int,
     val sex: String,
-    val status: PatientStatus,
-    val assignedWard: String? = null,
-    val triageLevel: Int = 3,
-    val clinician: String? = null,
-    val diagnosis: String? = null
+    val status: String,
+    val assignedWard: String? = null
 )
 
-@Serializable
 data class DashboardMetric(
     val title: String,
     val value: String

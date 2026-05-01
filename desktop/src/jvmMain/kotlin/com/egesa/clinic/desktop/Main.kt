@@ -2,11 +2,13 @@ package com.egesa.clinic.desktop
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,8 +24,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,12 +32,16 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.egesa.clinic.shared.BottleneckCell
 import com.egesa.clinic.shared.HospitalState
+import com.egesa.clinic.shared.UserRole
+import com.egesa.clinic.shared.Patient
 import com.egesa.clinic.shared.WorkflowArea
 import java.time.LocalDate
 
@@ -71,37 +75,122 @@ fun main() = application {
     Window(onCloseRequest = ::exitApplication, title = "Hospital Manager") {
         MaterialTheme {
             Surface(Modifier.fillMaxSize()) {
-                HospitalDashboard(state)
+                DesktopAppShell(state)
             }
         }
     }
 }
 
+enum class BillingCategory(val title: String) {
+    SERVICES("Services Billing"),
+    PHARMACY("Pharmacy Billing")
+}
+
+data class BillItem(val name: String, val qty: Int, val unitPrice: Double)
+
+enum class TxStatus { PENDING, SUCCESS, FAILED, CANCELLED }
+
+data class Transaction(
+    val patient: String,
+    val category: BillingCategory,
+    val date: LocalDate,
+    val amount: Double,
+    val status: TxStatus,
+    val receiptNo: String? = null,
+    val reason: String? = null
+)
+
 @Composable
-private fun HospitalDashboard(state: HospitalState) {
-    var activeArea by remember { mutableStateOf(WorkflowArea.RECEPTION) }
-    val areas = WorkflowArea.entries
+private fun DesktopAppShell(state: HospitalState) {
+    var currentRole by remember { mutableStateOf(UserRole.ADMIN) }
+    val visibleNavItems = state.globalNavItemsFor(currentRole)
+    var activeArea by remember { mutableStateOf(visibleNavItems.first().area) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Egesa Hospital Management", style = MaterialTheme.typography.headlineSmall)
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(
+                title = { Text("Egesa Hospital Management") },
+                actions = {
+                    Text(state.globalActions().joinToString(" • ") { it.label }, Modifier.padding(end = 12.dp))
+                }
+            )
+        }
+    ) { padding ->
+        Row(Modifier.fillMaxSize().padding(padding)) {
+            NavigationRail {
+                visibleNavItems.forEach { item ->
+                    NavigationRailItem(
+                        selected = activeArea == item.area,
+                        onClick = { activeArea = item.area },
+                        icon = { Text(item.label.take(1)) },
+                        label = { Text(item.label) }
+                    )
+                }
+            }
 
-        TabRow(selectedTabIndex = areas.indexOf(activeArea)) {
-            areas.forEach { area ->
-                Tab(
-                    selected = area == activeArea,
-                    onClick = { activeArea = area },
-                    text = { Text(area.name.lowercase().replaceFirstChar { it.uppercase() }) }
-                )
+            Column(
+                Modifier.fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Role: ${currentRole.name} | ${visibleNavItems.firstOrNull { it.area == activeArea }?.visibilityAnnotation.orEmpty()}")
+                BreadcrumbHeader(state.breadcrumbFor(activeArea))
+                if (activeArea == WorkflowArea.ADMIN) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        state.metrics().forEach { metric ->
+                            Card(Modifier.weight(1f)) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(metric.title)
+                                    Text(metric.value, style = MaterialTheme.typography.headlineMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(state.allPatients()) { patient ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text("${patient.id} • ${patient.fullName}")
+                                Text("${patient.age} yrs, ${patient.sex}")
+                                Text("Status: ${patient.status}")
+                                patient.assignedWard?.let { Text("Ward: $it") }
+                            }
+                        }
+        if (activeArea == WorkflowArea.ADMIN) {
+            AdminDashboard(state)
+        } else {
+            PatientList(state)
+        }
+    }
+}
+
+@Composable
+private fun AdminDashboard(state: HospitalState) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Text("Admin Dashboard", style = MaterialTheme.typography.titleLarge)
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                state.adminKpis().take(3).forEach { metric ->
+                    Card(Modifier.weight(1f)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(metric.title)
+                            Text(metric.value, style = MaterialTheme.typography.headlineSmall)
+                            metric.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }
+                }
             }
         }
-
-        if (activeArea == WorkflowArea.ADMIN) {
+        item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                state.metrics().forEach { metric ->
+                state.adminKpis().drop(3).forEach { metric ->
                     Card(Modifier.weight(1f)) {
-                        Column(Modifier.padding(12.dp)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(metric.title)
-                            Text(metric.value, style = MaterialTheme.typography.headlineMedium)
+                            Text(metric.value, style = MaterialTheme.typography.headlineSmall)
+                            metric.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                         }
                     }
                 }
@@ -119,6 +208,50 @@ private fun HospitalDashboard(state: HospitalState) {
                         Text("Status: ${patient.status}")
                         patient.assignedWard?.let { Text("Ward: $it") }
                     }
+                }
+            }
+        }
+
+        item { Text("Configuration", style = MaterialTheme.typography.titleMedium) }
+        items(state.configurationSets()) { config ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(config.title)
+                    Text(config.entries.joinToString(" • "))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottleneckRow(cell: BottleneckCell) {
+    val severityColor = when (cell.severity) {
+        "Critical" -> Color(0xFFFFCDD2)
+        "High" -> Color(0xFFFFE0B2)
+        "Medium" -> Color(0xFFFFF9C4)
+        else -> Color(0xFFC8E6C9)
+    }
+
+    Row(
+        Modifier.fillMaxWidth().background(severityColor).padding(8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(cell.workflowStage)
+        Text("${cell.pendingCount} pending (${cell.severity})")
+    }
+}
+
+@Composable
+private fun PatientList(state: HospitalState) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(state.allPatients()) { patient ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("${patient.id} • ${patient.fullName}")
+                    Text("${patient.age} yrs, ${patient.sex}")
+                    Text("Status: ${patient.status}")
+                    patient.assignedWard?.let { Text("Ward: $it") }
                 }
             }
         }

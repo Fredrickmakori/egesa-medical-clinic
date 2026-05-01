@@ -19,7 +19,34 @@ enum class UserRole {
     ADMIN
 }
 
-<<<<<<< codex/create-app-shell-frame-templates-and-navigation
+enum class TimelineType {
+    VISIT,
+    DIAGNOSIS,
+    ORDER,
+    MEDICATION,
+    WARD_TRANSFER
+}
+
+enum class SaveState {
+    DRAFT_SAVED,
+    UNSAVED_CHANGES,
+    FINAL_SIGN_OFF
+}
+
+data class TimelineEvent(
+    val title: String,
+    val details: String,
+    val timestamp: String,
+    val type: TimelineType
+)
+
+data class EncounterForm(
+    val chiefComplaint: String = "",
+    val history: String = "",
+    val examinationFindings: String = "",
+    val provisionalDiagnosis: String = ""
+)
+
 data class GlobalNavItem(
     val area: WorkflowArea,
     val label: String,
@@ -32,22 +59,7 @@ data class GlobalAction(
     val label: String
 )
 
-=======
-object PatientStatus {
-    const val WAITING = "WAITING"
-    const val IN_CONSULTATION = "IN_CONSULTATION"
-    const val IN_DIAGNOSIS = "IN_DIAGNOSIS"
-    const val ADMITTED = "ADMITTED"
-}
 
-enum class StkRequestStatus {
-    PENDING,
-    SUCCESS,
-    FAILED
-}
-
-@Serializable
->>>>>>> main
 data class Patient(
     val id: String,
     val fullName: String,
@@ -55,9 +67,10 @@ data class Patient(
     val sex: String,
     val status: String,
     val assignedWard: String? = null,
-    val triageLevel: Int = 3,
-    val clinician: String? = null,
-    val diagnosis: String? = null
+    val visits: Int = 0,
+    val activeDiagnosis: String = "",
+    val currentMedications: List<String> = emptyList(),
+    val timeline: List<TimelineEvent> = emptyList()
 )
 
 data class DashboardMetric(
@@ -226,129 +239,57 @@ class PaymentSyncManager(
 }
 
 class HospitalState {
-    private val patients = mutableListOf(
-        Patient("PT-001", "Amina Yusuf", 34, "F", PatientStatus.WAITING, triageLevel = 2),
-        Patient("PT-002", "John Ouma", 58, "M", PatientStatus.IN_DIAGNOSIS, clinician = "Dr. Otieno", diagnosis = "Hypertension"),
-        Patient("PT-003", "Martha Wekesa", 12, "F", PatientStatus.ADMITTED, "Pediatrics", triageLevel = 2, clinician = "Dr. Naliaka"),
-        Patient("PT-004", "Daniel Mwangi", 41, "M", PatientStatus.IN_CONSULTATION, clinician = "Dr. Achieng")
-    )
-    private val paymentRecords = mutableListOf<PaymentRecord>()
-
-    private val wardBeds = listOf(
-        WardBed("PED-01", "Pediatrics", "PT-003"),
-        WardBed("PED-02", "Pediatrics", null),
-        WardBed("GEN-01", "General", null),
-        WardBed("GEN-02", "General", null)
-    )
-
-    private val outstandingBills = mutableListOf(
-        OutstandingBill("BILL-001", "PT-001", 1200.0, PaymentCategory.SERVICE, "General consultation"),
-        OutstandingBill("BILL-002", "PT-002", 850.0, PaymentCategory.PHARMACY, "Hypertension medication"),
-        OutstandingBill("BILL-003", "PT-003", 3000.0, PaymentCategory.SERVICE, "Pediatric ward admission")
-    )
-
-    private val paymentRecords = mutableListOf(
-        PaymentRecord(
-            paymentId = "PAY-001",
-            patientId = "PT-002",
-            amount = 850.0,
-            category = PaymentCategory.PHARMACY,
-            status = PaymentStatus.SUCCESS,
-            timestamp = 1714550400000,
-            billReference = "BILL-002",
-            visitReference = "VISIT-002",
-            checkoutRequestId = "ws_CO_12345",
-            merchantRequestId = "29115-34620561-1",
-            receiptNumber = "QHG7T8Y9"
-        ),
-        PaymentRecord(
-            paymentId = "PAY-002",
-            patientId = "PT-001",
-            amount = 1200.0,
-            category = PaymentCategory.SERVICE,
-            status = PaymentStatus.PENDING,
-            timestamp = 1714636800000,
-            billReference = "BILL-001",
-            visitReference = "VISIT-001"
-        )
-    )
-
-    fun allPatients(query: String = ""): List<Patient> {
-        if (query.isBlank()) return patients.toList()
-        return patients.filter {
-            it.fullName.contains(query, ignoreCase = true) || it.id.contains(query, ignoreCase = true)
-        }
-    }
-
-    fun addPaymentRecord(record: PaymentRecord) {
-        paymentRecords += record
-    }
-
-    fun paymentRecords(): List<PaymentRecord> = paymentRecords.toList()
-
-    fun updatePaymentRecordStatus(paymentId: String, status: StkRequestStatus, syncError: String? = null) {
-        val index = paymentRecords.indexOfFirst { it.id == paymentId }
-        if (index < 0) return
-        val existing = paymentRecords[index]
-        paymentRecords[index] = existing.copy(
-            stkStatus = status,
-            syncError = syncError,
-            lastSyncedAt = Clock.System.now(),
-            synced = status == StkRequestStatus.SUCCESS
-        )
-    }
-
-    fun pendingStkRequests(): List<PaymentRecord> = paymentRecords.filter {
-        it.stkRequestId != null && it.stkStatus == StkRequestStatus.PENDING
-    }
-
-    fun reconcilePendingStkRequests(checkStatus: (String) -> StkRequestStatus): Int {
-        var updated = 0
-        for (index in paymentRecords.indices) {
-            val record = paymentRecords[index]
-            if (record.stkRequestId == null || record.stkStatus != StkRequestStatus.PENDING) {
-                continue
-            }
-            val newStatus = checkStatus(record.stkRequestId)
-            if (newStatus == StkRequestStatus.PENDING) {
-                continue
-            }
-            updated += 1
-            paymentRecords[index] = record.copy(
-                stkStatus = newStatus,
-                synced = newStatus == StkRequestStatus.SUCCESS,
-                lastSyncedAt = Clock.System.now(),
-                syncError = if (newStatus == StkRequestStatus.FAILED) "STK charge failed" else null
+    private val patients = listOf(
+        Patient(
+            id = "PT-001",
+            fullName = "Amina Yusuf",
+            age = 34,
+            sex = "F",
+            status = "Awaiting consultation",
+            visits = 4,
+            activeDiagnosis = "Acute pharyngitis",
+            currentMedications = listOf("Paracetamol 500mg", "Cetirizine 10mg"),
+            timeline = listOf(
+                TimelineEvent("Outpatient visit", "Fever and sore throat", "2026-04-29 09:30", TimelineType.VISIT),
+                TimelineEvent("Provisional diagnosis", "Acute pharyngitis", "2026-04-29 09:50", TimelineType.DIAGNOSIS),
+                TimelineEvent("Lab order", "CBC", "2026-04-29 09:55", TimelineType.ORDER),
+                TimelineEvent("Medication prescribed", "Paracetamol 500mg", "2026-04-29 10:05", TimelineType.MEDICATION)
             )
-        }
-        return updated
-    }
+        ),
+        Patient(
+            id = "PT-002",
+            fullName = "John Ouma",
+            age = 58,
+            sex = "M",
+            status = "In diagnosis",
+            visits = 7,
+            activeDiagnosis = "Hypertensive urgency",
+            currentMedications = listOf("Amlodipine 5mg"),
+            timeline = listOf(
+                TimelineEvent("ER visit", "Headache and high BP", "2026-05-01 08:10", TimelineType.VISIT),
+                TimelineEvent("Imaging request", "CT brain", "2026-05-01 08:40", TimelineType.ORDER),
+                TimelineEvent("Ward transfer", "To Observation Ward", "2026-05-01 09:00", TimelineType.WARD_TRANSFER)
+            )
+        ),
+        Patient(
+            id = "PT-003",
+            fullName = "Martha Wekesa",
+            age = 12,
+            sex = "F",
+            status = "Admitted",
+            assignedWard = "Pediatrics",
+            visits = 2,
+            activeDiagnosis = "Severe malaria",
+            currentMedications = listOf("Artemether/Lumefantrine"),
+            timeline = listOf(
+                TimelineEvent("Admission", "High fever and chills", "2026-04-30 14:20", TimelineType.VISIT),
+                TimelineEvent("Diagnosis", "Severe malaria", "2026-04-30 15:00", TimelineType.DIAGNOSIS),
+                TimelineEvent("Medication", "Artemether/Lumefantrine", "2026-04-30 15:10", TimelineType.MEDICATION)
+            )
+        )
+    )
 
-    fun syncHealth(): PaymentSyncHealth {
-        val pending = paymentRecords.count { !it.synced }
-        val failed = paymentRecords.count { it.syncError != null }
-        return PaymentSyncHealth(pendingSyncCount = pending, failedSyncCount = failed)
-    }
-
-    fun receptionQueue(): List<QueueItem> = patients
-        .filter { it.status == PatientStatus.WAITING }
-        .mapIndexed { index, patient ->
-            QueueItem(patient.id, patient.fullName, patient.triageLevel, waitMinutes = 12 + (index * 8))
-        }
-
-    fun wardBeds(): List<WardBed> = wardBeds
-
-    fun outstandingBills(): List<OutstandingBill> = outstandingBills.toList()
-
-    fun paymentRecords(): List<PaymentRecord> = paymentRecords.toList()
-
-    fun outstandingBillsByPatient(patientId: String): List<OutstandingBill> =
-        outstandingBills.filter { it.patientId.equals(patientId, ignoreCase = true) }
-
-    fun paymentRecordsByPatient(patientId: String): List<PaymentRecord> =
-        paymentRecords.filter { it.patientId.equals(patientId, ignoreCase = true) }
-
-<<<<<<< codex/create-app-shell-frame-templates-and-navigation
+    fun allPatients(): List<Patient> = patients
     private val navItems = listOf(
         GlobalNavItem(WorkflowArea.RECEPTION, "Reception", setOf(UserRole.RECEPTIONIST, UserRole.ADMIN), "Receptionist (Reception)"),
         GlobalNavItem(WorkflowArea.CONSULTATION, "Consultation", setOf(UserRole.DOCTOR, UserRole.ADMIN), "Doctor (Consultation)"),
@@ -367,10 +308,6 @@ class HospitalState {
     )
 
     fun allPatients(): List<Patient> = patients.toList()
-=======
-    fun paymentRecordsByStatus(status: PaymentStatus): List<PaymentRecord> =
-        paymentRecords.filter { it.status == status }
->>>>>>> main
 
     fun adminKpis(): List<DashboardMetric> = listOf(
         DashboardMetric("Registrations / Day", "126", "+8% vs yesterday"),

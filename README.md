@@ -19,3 +19,6 @@ This is an initial scaffold focused on architecture and feature areas. Next step
 2. Authentication/roles
 3. Networking/API for multi-user sync
 4. Report exports and dashboards
+
+## UX and Figma Standards
+- See `docs/figma-accessibility-ux-guidelines.md` for required annotation rules covering accessibility, risky-action confirmations, interruption-safe UX, and localization patterns.

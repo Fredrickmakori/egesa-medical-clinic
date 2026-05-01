@@ -10,13 +10,30 @@ enum class WorkflowArea {
     ADMIN
 }
 
+object PatientStatus {
+    const val WAITING = "WAITING"
+    const val IN_CONSULTATION = "IN_CONSULTATION"
+    const val IN_DIAGNOSIS = "IN_DIAGNOSIS"
+    const val ADMITTED = "ADMITTED"
+}
+
+enum class StkRequestStatus {
+    PENDING,
+    SUCCESS,
+    FAILED
+}
+
+@Serializable
 data class Patient(
     val id: String,
     val fullName: String,
     val age: Int,
     val sex: String,
     val status: String,
-    val assignedWard: String? = null
+    val assignedWard: String? = null,
+    val triageLevel: Int = 3,
+    val clinician: String? = null,
+    val diagnosis: String? = null
 )
 
 data class DashboardMetric(
@@ -100,6 +117,49 @@ data class OutstandingBill(
 interface RecordSyncClient {
     suspend fun uploadPatients(patients: List<Patient>)
     suspend fun fetchPatients(): List<Patient>
+    suspend fun submitPaymentEvent(paymentRecord: PaymentRecord)
+    suspend fun checkStkStatus(stkRequestId: String): StkRequestStatus
+}
+
+class PaymentSyncManager(
+    private val syncClient: RecordSyncClient
+) {
+    private val unsyncedQueue = mutableListOf<PaymentRecord>()
+
+    fun queueForSync(record: PaymentRecord) {
+        unsyncedQueue += record.copy(synced = false)
+    }
+
+    fun pendingRecords(): List<PaymentRecord> = unsyncedQueue.toList()
+
+    suspend fun flushQueue(): List<PaymentRecord> {
+        if (unsyncedQueue.isEmpty()) return emptyList()
+
+        val flushed = mutableListOf<PaymentRecord>()
+        val iterator = unsyncedQueue.listIterator()
+        while (iterator.hasNext()) {
+            val record = iterator.next()
+            val attempt = record.retryCount + 1
+            try {
+                syncClient.submitPaymentEvent(record)
+                flushed += record.copy(
+                    synced = true,
+                    lastSyncedAt = Clock.System.now(),
+                    retryCount = attempt,
+                    syncError = null
+                )
+                iterator.remove()
+            } catch (exception: Exception) {
+                iterator.set(
+                    record.copy(
+                        retryCount = attempt,
+                        syncError = exception.message ?: "sync failed"
+                    )
+                )
+            }
+        }
+        return flushed
+    }
 }
 
 class HospitalState {
@@ -109,6 +169,7 @@ class HospitalState {
         Patient("PT-003", "Martha Wekesa", 12, "F", PatientStatus.ADMITTED, "Pediatrics", triageLevel = 2, clinician = "Dr. Naliaka"),
         Patient("PT-004", "Daniel Mwangi", 41, "M", PatientStatus.IN_CONSULTATION, clinician = "Dr. Achieng")
     )
+    private val paymentRecords = mutableListOf<PaymentRecord>()
 
     private val wardBeds = listOf(
         WardBed("PED-01", "Pediatrics", "PT-003"),
@@ -154,6 +215,53 @@ class HospitalState {
         return patients.filter {
             it.fullName.contains(query, ignoreCase = true) || it.id.contains(query, ignoreCase = true)
         }
+    }
+
+    fun addPaymentRecord(record: PaymentRecord) {
+        paymentRecords += record
+    }
+
+    fun paymentRecords(): List<PaymentRecord> = paymentRecords.toList()
+
+    fun updatePaymentRecordStatus(paymentId: String, status: StkRequestStatus, syncError: String? = null) {
+        val index = paymentRecords.indexOfFirst { it.id == paymentId }
+        if (index < 0) return
+        val existing = paymentRecords[index]
+        paymentRecords[index] = existing.copy(
+            stkStatus = status,
+            syncError = syncError,
+            lastSyncedAt = Clock.System.now(),
+            synced = status == StkRequestStatus.SUCCESS
+        )
+    }
+
+    fun pendingStkRequests(): List<PaymentRecord> = paymentRecords.filter {
+        it.stkRequestId != null && it.stkStatus == StkRequestStatus.PENDING
+    }
+
+    fun reconcilePendingStkRequests(checkStatus: (String) -> StkRequestStatus): Int {
+        var updated = 0
+        paymentRecords.replaceAll { record ->
+            if (record.stkRequestId == null || record.stkStatus != StkRequestStatus.PENDING) {
+                return@replaceAll record
+            }
+            val newStatus = checkStatus(record.stkRequestId)
+            if (newStatus == StkRequestStatus.PENDING) return@replaceAll record
+            updated += 1
+            record.copy(
+                stkStatus = newStatus,
+                synced = newStatus == StkRequestStatus.SUCCESS,
+                lastSyncedAt = Clock.System.now(),
+                syncError = if (newStatus == StkRequestStatus.FAILED) "STK charge failed" else null
+            )
+        }
+        return updated
+    }
+
+    fun syncHealth(): PaymentSyncHealth {
+        val pending = paymentRecords.count { !it.synced }
+        val failed = paymentRecords.count { it.syncError != null }
+        return PaymentSyncHealth(pendingSyncCount = pending, failedSyncCount = failed)
     }
 
     fun receptionQueue(): List<QueueItem> = patients

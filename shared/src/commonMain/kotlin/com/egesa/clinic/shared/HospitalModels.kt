@@ -1,5 +1,7 @@
 package com.egesa.clinic.shared
 
+import kotlinx.serialization.Serializable
+
 enum class WorkflowArea {
     RECEPTION,
     CONSULTATION,
@@ -42,6 +44,59 @@ data class CloudSyncConfig(
     val anonKey: String
 )
 
+enum class PaymentCategory {
+    SERVICE,
+    PHARMACY
+}
+
+enum class PaymentStatus {
+    PENDING,
+    STK_SENT,
+    SUCCESS,
+    FAILED,
+    CANCELLED
+}
+
+data class MpesaPaymentRequest(
+    val patientId: String,
+    val phoneNumber: String,
+    val amount: Double,
+    val accountRef: String,
+    val description: String,
+    val category: PaymentCategory
+)
+
+data class MpesaPaymentResult(
+    val checkoutRequestId: String,
+    val merchantRequestId: String,
+    val status: PaymentStatus,
+    val receiptNumber: String? = null,
+    val resultCode: String? = null,
+    val resultDesc: String? = null
+)
+
+data class PaymentRecord(
+    val paymentId: String,
+    val patientId: String,
+    val amount: Double,
+    val category: PaymentCategory,
+    val status: PaymentStatus,
+    val timestamp: Long,
+    val billReference: String? = null,
+    val visitReference: String? = null,
+    val checkoutRequestId: String? = null,
+    val merchantRequestId: String? = null,
+    val receiptNumber: String? = null
+)
+
+data class OutstandingBill(
+    val billId: String,
+    val patientId: String,
+    val amountDue: Double,
+    val category: PaymentCategory,
+    val description: String
+)
+
 interface RecordSyncClient {
     suspend fun uploadPatients(patients: List<Patient>)
     suspend fun fetchPatients(): List<Patient>
@@ -62,6 +117,38 @@ class HospitalState {
         WardBed("GEN-02", "General", null)
     )
 
+    private val outstandingBills = mutableListOf(
+        OutstandingBill("BILL-001", "PT-001", 1200.0, PaymentCategory.SERVICE, "General consultation"),
+        OutstandingBill("BILL-002", "PT-002", 850.0, PaymentCategory.PHARMACY, "Hypertension medication"),
+        OutstandingBill("BILL-003", "PT-003", 3000.0, PaymentCategory.SERVICE, "Pediatric ward admission")
+    )
+
+    private val paymentRecords = mutableListOf(
+        PaymentRecord(
+            paymentId = "PAY-001",
+            patientId = "PT-002",
+            amount = 850.0,
+            category = PaymentCategory.PHARMACY,
+            status = PaymentStatus.SUCCESS,
+            timestamp = 1714550400000,
+            billReference = "BILL-002",
+            visitReference = "VISIT-002",
+            checkoutRequestId = "ws_CO_12345",
+            merchantRequestId = "29115-34620561-1",
+            receiptNumber = "QHG7T8Y9"
+        ),
+        PaymentRecord(
+            paymentId = "PAY-002",
+            patientId = "PT-001",
+            amount = 1200.0,
+            category = PaymentCategory.SERVICE,
+            status = PaymentStatus.PENDING,
+            timestamp = 1714636800000,
+            billReference = "BILL-001",
+            visitReference = "VISIT-001"
+        )
+    )
+
     fun allPatients(query: String = ""): List<Patient> {
         if (query.isBlank()) return patients.toList()
         return patients.filter {
@@ -76,6 +163,19 @@ class HospitalState {
         }
 
     fun wardBeds(): List<WardBed> = wardBeds
+
+    fun outstandingBills(): List<OutstandingBill> = outstandingBills.toList()
+
+    fun paymentRecords(): List<PaymentRecord> = paymentRecords.toList()
+
+    fun outstandingBillsByPatient(patientId: String): List<OutstandingBill> =
+        outstandingBills.filter { it.patientId.equals(patientId, ignoreCase = true) }
+
+    fun paymentRecordsByPatient(patientId: String): List<PaymentRecord> =
+        paymentRecords.filter { it.patientId.equals(patientId, ignoreCase = true) }
+
+    fun paymentRecordsByStatus(status: PaymentStatus): List<PaymentRecord> =
+        paymentRecords.filter { it.status == status }
 
     fun metrics(): List<DashboardMetric> = listOf(
         DashboardMetric("Registered Today", patients.size.toString()),

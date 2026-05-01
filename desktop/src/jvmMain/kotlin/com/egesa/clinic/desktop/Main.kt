@@ -12,14 +12,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -39,9 +38,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.egesa.clinic.shared.EncounterForm
 import com.egesa.clinic.shared.HospitalState
-import com.egesa.clinic.shared.Patient
-import com.egesa.clinic.shared.SaveState
-import com.egesa.clinic.shared.TimelineEvent
+import com.egesa.clinic.shared.Shift
 import com.egesa.clinic.shared.WorkflowArea
 import java.time.LocalDate
 
@@ -222,34 +219,77 @@ private fun ConsultationWorkbench(state: HospitalState) {
             }
         }
 
-        OrdersBoard()
-
-        Card(Modifier.weight(1.6f).fillMaxSize()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Encounter Form", style = MaterialTheme.typography.titleMedium)
-                OutlinedTextField(form.chiefComplaint, {
-                    form = form.copy(chiefComplaint = it)
-                    saveState = SaveState.UNSAVED_CHANGES
-                }, label = { Text("Chief complaint") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(form.history, {
-                    form = form.copy(history = it)
-                    saveState = SaveState.UNSAVED_CHANGES
-                }, label = { Text("History") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(form.examinationFindings, {
-                    form = form.copy(examinationFindings = it)
-                    saveState = SaveState.UNSAVED_CHANGES
-                }, label = { Text("Examination findings") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(form.provisionalDiagnosis, {
-                    form = form.copy(provisionalDiagnosis = it)
-                    saveState = SaveState.UNSAVED_CHANGES
-                }, label = { Text("Provisional diagnosis") }, modifier = Modifier.fillMaxWidth())
-
-                Text("Quick Actions", style = MaterialTheme.typography.titleSmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Order Labs", "Request Imaging", "Prescribe Meds", "Refer", "Admit/Discharge").forEach { action ->
-                        Button(onClick = { saveState = SaveState.UNSAVED_CHANGES }, modifier = Modifier.widthIn(min = 140.dp)) {
-                            Text(action)
+        if (activeArea == WorkflowArea.WARD) {
+            WardOperationsScreen(state)
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(state.allPatients()) { patient ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("${patient.id} • ${patient.fullName}")
+                            Text("${patient.age} yrs, ${patient.sex}")
+                            Text("Status: ${patient.status}")
+                            patient.assignedWard?.let { Text("Ward: $it") }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WardOperationsScreen(state: HospitalState) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { WardOverviewCard(state) }
+        item { BedBoard(state) }
+        item { AdmissionTransferDischargeFlow(state) }
+        item { NursingTaskList(state) }
+        item { PrintableWardCensusAndHandoff(state) }
+    }
+}
+
+@Composable
+private fun WardOverviewCard(state: HospitalState) {
+    val overview = state.wardOverview()
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Ward Overview", style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OverviewChip("Occupancy", "${overview.occupancyPercent}%")
+                OverviewChip("Beds Available", overview.bedsAvailable.toString())
+                OverviewChip("Nurse Workload", overview.nurseWorkload)
+            }
+            Text("Alerts", style = MaterialTheme.typography.titleSmall)
+            overview.alerts.forEach { Text("• $it") }
+        }
+    }
+}
+
+@Composable
+private fun OverviewChip(label: String, value: String) {
+    Card(Modifier.weight(1f)) {
+        Column(Modifier.padding(8.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium)
+            Text(value, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
+private fun BedBoard(state: HospitalState) {
+    val beds = state.bedBoard()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Bed Board", style = MaterialTheme.typography.titleMedium)
+        LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+            items(beds) { bed ->
+                Card(Modifier.padding(4.dp)) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("${bed.ward} • ${bed.roomBed}", style = MaterialTheme.typography.titleSmall)
+                        Text(bed.patientName)
+                        Text("Status: ${bed.status}")
+                        Text("Acuity: ${bed.acuity}")
+                        Text("Isolation: ${bed.isolation ?: "None"}")
                     }
                 }
 
@@ -310,129 +350,34 @@ private fun ClinicalTimeline(events: List<TimelineEvent>) {
 }
 
 @Composable
-private fun BottleneckRow(cell: BottleneckCell) {
-    val severityColor = when (cell.severity) {
-        "Critical" -> Color(0xFFFFCDD2)
-        "High" -> Color(0xFFFFE0B2)
-        "Medium" -> Color(0xFFFFF9C4)
-        else -> Color(0xFFC8E6C9)
-    }
-
-    Row(
-        Modifier.fillMaxWidth().background(severityColor).padding(8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(cell.workflowStage)
-        Text("${cell.pendingCount} pending (${cell.severity})")
-    }
-}
-
-@Composable
-private fun PatientList(state: HospitalState) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(state.allPatients()) { patient ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("${patient.id} • ${patient.fullName}")
-                    Text("${patient.age} yrs, ${patient.sex}")
-                    Text("Status: ${patient.status}")
-                    patient.assignedWard?.let { Text("Ward: $it") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OrdersBoard() {
-    var tab by remember { mutableStateOf(OrdersBoardTab.LAB) }
-    val orders = remember {
-        mutableStateListOf(
-            OrderItem("ORD-1001", "Amina Yusuf", OrdersBoardTab.LAB, "CBC", "STAT", OrderStatus.PROCESSING, "Dr. Oduor", "Rule out sepsis", true, listOf(8, 9, 11, 13), listOf("cbc-report.pdf"), null),
-            OrderItem("ORD-1002", "John Ouma", OrdersBoardTab.IMAGING, "Chest X-Ray", "Routine", OrderStatus.COMPLETED, "Dr. Maina", "Persistent cough", false, listOf(2, 2, 1, 1), listOf("xray-image.png"), "Dr. Maina"),
-            OrderItem("ORD-1003", "Martha Wekesa", OrdersBoardTab.PROCEDURES, "Lumbar puncture", "Urgent", OrderStatus.CRITICAL_RESULT, "Dr. Naliaka", "Neuro decline overnight", true, listOf(5, 7, 9, 12), listOf("consent-form.pdf", "op-note.pdf"), "Dr. Naliaka", false)
-        )
-    }
-    var showEntryDialog by remember { mutableStateOf(false) }
-    var selectedStatuses by remember { mutableStateOf(setOf<OrderStatus>()) }
-
+private fun AdmissionTransferDischargeFlow(state: HospitalState) {
+    val atd = state.atdState()
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Orders Board", style = MaterialTheme.typography.titleLarge)
-                Button(onClick = { showEntryDialog = true }) { Text("New Order") }
-            }
-
-            TabRow(selectedTabIndex = tab.ordinal) {
-                OrdersBoardTab.entries.forEach { entry ->
-                    Tab(
-                        selected = tab == entry,
-                        onClick = { tab = entry },
-                        text = { Text(entry.name.lowercase().replaceFirstChar { it.uppercase() }) }
-                    )
-                }
-            }
-
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OrderStatus.entries.forEach { status ->
-                    FilterChip(
-                        selected = status in selectedStatuses,
-                        onClick = {
-                            selectedStatuses = if (status in selectedStatuses) selectedStatuses - status else selectedStatuses + status
-                        },
-                        label = { Text(status.label) }
-                    )
-                }
-            }
-
-            val filteredOrders = orders.filter {
-                it.category == tab && (selectedStatuses.isEmpty() || it.status in selectedStatuses)
-            }
-
-            filteredOrders.forEach { order ->
-                OrderCard(order = order) { acknowledgedId ->
-                    val idx = orders.indexOfFirst { it.id == acknowledgedId }
-                    if (idx != -1) {
-                        orders[idx] = orders[idx].copy(acknowledgedCritical = true, reviewedBy = "Charge Nurse")
-                    }
-                }
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Admission / Transfer / Discharge", style = MaterialTheme.typography.titleMedium)
+            Text("Assign Bed: ${atd.selectedPatientId} → ${atd.selectedBed}")
+            Text("Transfer Ward: ${atd.selectedPatientId} → ${atd.transferWard}")
+            Text("Discharge Checklist")
+            atd.dischargeChecklist.forEach { (item, done) ->
+                Text("${if (done) "✓" else "☐"} $item")
             }
         }
-    }
-
-    if (showEntryDialog) {
-        OrderEntryDialog(
-            onDismiss = { showEntryDialog = false },
-            onSave = { newOrder ->
-                orders.add(0, newOrder.copy(id = "ORD-${1000 + orders.size + 1}"))
-                showEntryDialog = false
-            }
-        )
     }
 }
 
 @Composable
-private fun OrderCard(order: OrderItem, onAcknowledgeCritical: (String) -> Unit) {
+private fun NursingTaskList(state: HospitalState) {
+    val tasks = state.nursingTasks()
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${order.id} • ${order.patientName}", style = MaterialTheme.typography.titleMedium)
-                StatusChip(order.status)
-            }
-            Text("Order: ${order.title} (${order.urgency})")
-            Text("Ordering Clinician: ${order.orderedBy}")
-            Text("Notes: ${order.notes}")
-
-            ResultViewer(order)
-
-            if (order.status == OrderStatus.CRITICAL_RESULT) {
-                Card(Modifier.fillMaxWidth().background(Color(0xFFFFEAEA))) {
-                    Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(if (order.acknowledgedCritical) "Critical result acknowledged" else "Critical result escalation required")
-                        Button(onClick = { onAcknowledgeCritical(order.id) }, enabled = !order.acknowledgedCritical) {
-                            Text(if (order.acknowledgedCritical) "Acknowledged" else "Acknowledge")
-                        }
-                    }
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Nursing Task List", style = MaterialTheme.typography.titleMedium)
+            tasks.forEach { task ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(if (task.priority == "High") Color(0xFFFFF0F0) else Color.Transparent).padding(6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("${task.type}: ${task.detail}")
+                    Text("${task.due} • ${task.priority}")
                 }
             }
         }
@@ -440,95 +385,19 @@ private fun OrderCard(order: OrderItem, onAcknowledgeCritical: (String) -> Unit)
 }
 
 @Composable
-private fun StatusChip(status: OrderStatus) {
-    val color = when (status) {
-        OrderStatus.PENDING -> Color(0xFFE3F2FD)
-        OrderStatus.COLLECTED -> Color(0xFFE8F5E9)
-        OrderStatus.PROCESSING -> Color(0xFFFFF8E1)
-        OrderStatus.COMPLETED -> Color(0xFFEDE7F6)
-        OrderStatus.CRITICAL_RESULT -> Color(0xFFFFCDD2)
-    }
-    AssistChip(onClick = {}, label = { Text(status.label) }, modifier = Modifier.background(color))
-}
-
-@Composable
-private fun ResultViewer(order: OrderItem) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Result Viewer", style = MaterialTheme.typography.titleSmall)
-        if (order.abnormal) {
-            Text("Abnormal findings detected", color = Color(0xFFC62828))
-        }
-        Text("Trend: ${order.trendPoints.joinToString(" → ")}")
-        Text("Attachments: ${order.attachments.joinToString()}")
-        Text("Reviewer Sign-off: ${order.reviewedBy ?: "Pending"}")
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun OrderEntryDialog(onDismiss: () -> Unit, onSave: (OrderItem) -> Unit) {
-    var patientName by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf("CBC") }
-    var urgency by remember { mutableStateOf("Routine") }
-    var notes by remember { mutableStateOf("") }
-    var clinician by remember { mutableStateOf("") }
-    var selectorOpen by remember { mutableStateOf(false) }
-
-    val testOptions = listOf("CBC", "Renal Panel", "Chest CT", "ECG", "Wound Debridement")
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Order Entry") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = patientName, onValueChange = { patientName = it }, label = { Text("Patient Name") })
-                ExposedDropdownMenuBox(expanded = selectorOpen, onExpandedChange = { selectorOpen = it }) {
-                    OutlinedTextField(
-                        value = selectedType,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Test/Procedure") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = selectorOpen) },
-                        modifier = Modifier.menuAnchor()
-                    )
-                    ExposedDropdownMenu(expanded = selectorOpen, onDismissRequest = { selectorOpen = false }) {
-                        testOptions.forEach { option ->
-                            DropdownMenuItem(text = { Text(option) }, onClick = {
-                                selectedType = option
-                                selectorOpen = false
-                            })
-                        }
-                    }
-                }
-                OutlinedTextField(value = urgency, onValueChange = { urgency = it }, label = { Text("Urgency") })
-                OutlinedTextField(value = clinician, onValueChange = { clinician = it }, label = { Text("Ordering Clinician") })
-                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes") })
+private fun PrintableWardCensusAndHandoff(state: HospitalState) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Printable Ward Census", style = MaterialTheme.typography.titleMedium)
+            state.wardCensus().forEach { row ->
+                Text("${row.ward}: ${row.occupiedBeds}/${row.totalBeds} occupied | High acuity ${row.highAcuityCount} | Isolation ${row.isolationCount}")
             }
-        },
-        confirmButton = {
-            Button(onClick = {
-                val typeCategory = when {
-                    selectedType.contains("CT") || selectedType.contains("X-Ray") || selectedType.contains("ECG") -> OrdersBoardTab.IMAGING
-                    selectedType.contains("Debridement") || selectedType.contains("Procedure") -> OrdersBoardTab.PROCEDURES
-                    else -> OrdersBoardTab.LAB
-                }
-                onSave(
-                    OrderItem(
-                        id = "",
-                        patientName = patientName.ifBlank { "Unknown Patient" },
-                        category = typeCategory,
-                        title = selectedType,
-                        urgency = urgency,
-                        status = OrderStatus.PENDING,
-                        orderedBy = clinician.ifBlank { "Unassigned" },
-                        notes = notes,
-                        abnormal = false,
-                        trendPoints = listOf(LocalDate.now().dayOfMonth % 10),
-                        attachments = emptyList()
-                    )
-                )
-            }) { Text("Save Order") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+            Divider()
+            Text("Shift Handoff Summary", style = MaterialTheme.typography.titleMedium)
+            Text("Day Shift")
+            state.shiftHandoffSummary(Shift.DAY).forEach { Text("• $it") }
+            Text("Night Shift")
+            state.shiftHandoffSummary(Shift.NIGHT).forEach { Text("• $it") }
+        }
+    }
 }

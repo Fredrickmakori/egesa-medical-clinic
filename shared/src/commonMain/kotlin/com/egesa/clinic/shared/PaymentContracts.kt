@@ -1,20 +1,12 @@
 package com.egesa.clinic.shared
 
-/**
- * Platform-agnostic gateway for M-Pesa STK payment operations.
- *
- * Shared code defines only the contract; platform/server modules provide concrete implementations.
- */
+import kotlinx.serialization.Serializable
+
 interface MpesaGateway {
     suspend fun initiateStkPush(request: MpesaPaymentRequest): MpesaPaymentResult
     suspend fun queryStkStatus(checkoutRequestId: String): MpesaPaymentResult
 }
 
-/**
- * Platform-agnostic persistence contract for payment records.
- *
- * This contract intentionally avoids coupling to any specific database, ORM, or transport.
- */
 interface PaymentRepository {
     suspend fun savePayment(record: PaymentRecord)
     suspend fun updatePayment(record: PaymentRecord)
@@ -25,6 +17,7 @@ interface PaymentRepository {
     suspend fun listPaymentsByPatientId(patientId: String): List<PaymentRecord>
 }
 
+@Serializable
 data class MpesaPaymentRequest(
     val amount: Long,
     val phoneNumber: String,
@@ -34,6 +27,7 @@ data class MpesaPaymentRequest(
     val visitId: String? = null
 )
 
+@Serializable
 data class MpesaPaymentResult(
     val checkoutRequestId: String? = null,
     val merchantRequestId: String? = null,
@@ -45,6 +39,7 @@ data class MpesaPaymentResult(
     val phoneNumber: String? = null
 )
 
+@Serializable
 data class PaymentRecord(
     val id: String,
     val patientId: String,
@@ -62,6 +57,7 @@ data class PaymentRecord(
     val updatedAtIso: String
 )
 
+@Serializable
 enum class PaymentStatus {
     PENDING,
     SUCCESS,

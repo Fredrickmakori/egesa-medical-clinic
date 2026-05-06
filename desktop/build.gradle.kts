@@ -1,11 +1,20 @@
 plugins {
-    kotlin("jvm")
-    id("org.jetbrains.compose")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.compose.compiler)
 }
 
-dependencies {
-    implementation(project(":shared"))
+kotlin {
+    jvm()
+
+    sourceSets {
+        jvmMain.dependencies {
+            implementation(project(":shared"))
+            implementation(compose.desktop.currentOs)
+            @Suppress("DEPRECATION")
+            implementation(compose.material3)
+        }
+    }
 }
 
 compose.desktop {

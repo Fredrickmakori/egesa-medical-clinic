@@ -1,8 +1,8 @@
 plugins {
-    id("com.android.application")
-    kotlin("android")
-    id("org.jetbrains.compose")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
@@ -18,12 +18,23 @@ android {
     }
 
     buildFeatures { compose = true }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
 }
 
 dependencies {
     implementation(project(":shared"))
-    implementation("org.jetbrains.compose.runtime:runtime:1.10.3")
-    implementation("org.jetbrains.compose.foundation:foundation:1.10.3")
-    implementation("org.jetbrains.compose.material3:material3:1.9.0")
-    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation(compose.runtime)
+    implementation(compose.foundation)
+    implementation(compose.material3)
+    implementation(libs.androidx.activity.compose)
 }

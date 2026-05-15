@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "com.egesa.clinic.android"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.egesa.clinic.android"
         minSdk = 24
-        targetSdk = 33
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -26,9 +26,7 @@ android {
 }
 
 kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
-    }
+    jvmToolchain(21)
 }
 
 dependencies {

@@ -7,7 +7,9 @@ plugins {
 }
 
 kotlin {
-    androidTarget()
+    jvmToolchain(21)
+    androidTarget {
+    }
     jvm("desktop")
 
     sourceSets {
@@ -37,6 +39,10 @@ kotlin {
 
 android {
     namespace = "com.egesa.clinic.shared"
-    compileSdk = 36
+    compileSdk = 35
     defaultConfig { minSdk = 24 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
 }

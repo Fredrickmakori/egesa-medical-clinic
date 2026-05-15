@@ -18,3 +18,8 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:2.3.12")
     implementation("ch.qos.logback:logback-classic:1.5.8")
 }
+
+
+kotlin {
+    jvmToolchain(21)
+}

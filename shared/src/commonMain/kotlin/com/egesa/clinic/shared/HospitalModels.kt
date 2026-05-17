@@ -376,4 +376,11 @@ class HospitalState {
     )
 
     fun pendingStkRequests(): List<String> = pendingStk.toList()
+
+    fun auditTrail(): List<AuditEvent> = listOf(
+        AuditEvent("AD-001", "Updated user role", "Staff Management", "2026-05-17T07:20:00Z", "USR-341"),
+        AuditEvent("RC-001", "Registered patient", "Reception", "2026-05-17T07:45:00Z", "PT-009"),
+        AuditEvent("DR-001", "Saved consultation note", "Consultation", "2026-05-17T08:05:00Z", "ENC-2201"),
+        AuditEvent("NR-001", "Recorded vitals", "Ward", "2026-05-17T08:18:00Z", "PT-003")
+    )
 }

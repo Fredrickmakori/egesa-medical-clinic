@@ -5,6 +5,13 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+tasks.register("prepareKotlinBuildScriptModel") {}
+tasks.register("prepareKotlinIdeaImport") {}
+
+kotlin {
+    jvmToolchain(21)
+}
+
 android {
     namespace = "com.egesa.clinic.android"
     compileSdk = 35
@@ -23,10 +30,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
-}
-
-kotlin {
-    jvmToolchain(21)
 }
 
 dependencies {

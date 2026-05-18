@@ -36,6 +36,8 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines)
+            implementation(libs.sqldelight.async)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.coroutines.core)
@@ -79,6 +81,7 @@ sqldelight {
     databases {
         create("ClinicDatabase") {
             packageName.set("com.egesa.clinic.shared.db")
+            generateAsync.set(true)
         }
     }
 }

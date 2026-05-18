@@ -14,7 +14,7 @@ CREATE TABLE PatientEntity (
   id TEXT PRIMARY KEY NOT NULL,
   fullName TEXT NOT NULL,
   age INTEGER NOT NULL,
-  sex TEXT NOT NULL,
+  sex TEXT NOT NULL CHECK (sex IN ('male','female','intersex','unknown')),
   status TEXT NOT NULL,
   assignedWard TEXT,
   roomBed TEXT,

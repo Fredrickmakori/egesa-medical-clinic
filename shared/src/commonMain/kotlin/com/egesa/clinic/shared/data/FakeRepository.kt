@@ -1,9 +1,9 @@
 package com.egesa.clinic.shared.data
 
 import com.egesa.clinic.shared.*
-import io.ktor.client.plugins.ClientRequestException
-import io.ktor.client.plugins.ServerResponseException
-import io.ktor.client.statement.bodyAsText
+import com.egesa.clinic.shared.sync.SyncHealthStatus
+import kotlinx.coroutines.delay
+import kotlinx.datetime.Clock
 
 object FakeRepository {
 
@@ -116,15 +116,21 @@ object FakeRepository {
         }
     }
 
-    private suspend fun <T> runResultOrFallback(apiCall: suspend () -> T, fallback: suspend () -> T): Result<T> {
-        return if (useMockFallback) {
-            Result.success(fallback())
-        } else {
-            try {
-                Result.success(apiCall())
-            } catch (e: Throwable) {
-                Result.failure(e.toRepositoryException())
-            }
+    /**
+     * Get sync health status from server
+     */
+    suspend fun getSyncHealth(): Result<SyncHealthStatus> {
+        return try {
+            delay(200)
+            // Backend route is explicitly defined under payments in the current API spec.
+            // TODO: GET /payments/sync-health
+            Result.success(SyncHealthStatus(
+                status = "healthy",
+                pendingCount = 0,
+                lastSyncTime = Clock.System.now().toEpochMilliseconds()
+            ))
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

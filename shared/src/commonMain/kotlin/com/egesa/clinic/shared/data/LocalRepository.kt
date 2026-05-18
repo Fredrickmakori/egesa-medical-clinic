@@ -100,6 +100,7 @@ class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
             provider_id = input.providerId,
             facility_id = input.facilityId
         )
+        queueSync("EncounterEntity", input.encounterId, "UPSERT", "{}")
     }
 
     fun getEncountersByPatient(patientId: String) =
@@ -171,6 +172,24 @@ class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
 
     fun getEncounterOutcome(encounterId: String) =
         dbQueries.selectEncounterOutcome(encounter_id = encounterId).executeAsOneOrNull()
+
+
+    fun queueSync(entityType: String, entityId: String, operation: String, payload: String) {
+        dbQueries.insertSyncItem(
+            id = "SYNC-${'$'}{Clock.System.now().toEpochMilliseconds()}-${'$'}entityId",
+            entityType = entityType,
+            entityId = entityId,
+            operation = operation,
+            payload = payload,
+            createdAt = Clock.System.now().toString()
+        )
+    }
+
+    fun getPendingSync() = dbQueries.selectPendingSync().executeAsList()
+
+    fun deleteSyncItem(id: String) {
+        dbQueries.deleteSyncItem(id = id)
+    }
 
     fun seedAdminIfEmpty() {
         if (getAllStaff().none { it.role == UserRole.ADMIN }) {

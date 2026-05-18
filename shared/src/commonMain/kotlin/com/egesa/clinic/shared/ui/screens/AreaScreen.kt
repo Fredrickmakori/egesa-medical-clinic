@@ -29,7 +29,7 @@ fun AreaScreen(area: WorkflowArea, session: SessionState, localRepository: Local
         WorkflowArea.ADMIN        -> AdminScreen(localRepository)
         WorkflowArea.RECEPTION    -> ReceptionScreen()
         WorkflowArea.WARDS        -> WardsScreen()
-        WorkflowArea.CONSULTATION -> ConsultationScreen()
+        WorkflowArea.CONSULTATION -> ClinicalProgramsScreen()
         else                      -> PlaceholderScreen(area)
     }
 }

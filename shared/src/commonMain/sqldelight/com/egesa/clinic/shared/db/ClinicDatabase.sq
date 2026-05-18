@@ -1,43 +1,44 @@
--- Table for Staff Members
+-- Staff
 CREATE TABLE StaffMemberEntity (
   id TEXT PRIMARY KEY NOT NULL,
   fullName TEXT NOT NULL,
   role TEXT NOT NULL,
   department TEXT,
-  pin TEXT, -- Added for local auth
+  pin TEXT,
   active INTEGER NOT NULL DEFAULT 1,
-  lastUpdated TEXT NOT NULL -- ISO 8601 timestamp
+  lastUpdated TEXT NOT NULL
 );
 
--- Table for Patients
+-- Master patient
 CREATE TABLE PatientEntity (
   id TEXT PRIMARY KEY NOT NULL,
   fullName TEXT NOT NULL,
   age INTEGER NOT NULL,
-  sex TEXT NOT NULL CHECK (sex IN ('male','female','intersex','unknown')),
+  sex TEXT NOT NULL,
   status TEXT NOT NULL,
   assignedWard TEXT,
   roomBed TEXT,
   acuity TEXT NOT NULL,
   isolation TEXT,
   version INTEGER NOT NULL DEFAULT 1,
-  syncedAt TEXT -- ISO 8601 timestamp
+  syncedAt TEXT
 );
 
--- Core clinical encounter tables
+-- Generic encounter core
 CREATE TABLE EncounterEntity (
   encounter_id TEXT PRIMARY KEY NOT NULL,
-  patient_id TEXT NOT NULL REFERENCES PatientEntity(id),
+  patient_id TEXT NOT NULL,
   encounter_datetime TEXT NOT NULL,
-  department TEXT NOT NULL CHECK (department IN ('OPD', 'ANC', 'MATERNITY', 'CCC', 'NCD')),
+  department TEXT NOT NULL,
   visit_type TEXT NOT NULL,
   provider_id TEXT,
-  facility_id TEXT NOT NULL
+  facility_id TEXT NOT NULL,
+  sync_state TEXT NOT NULL DEFAULT 'LOCAL_ONLY'
 );
 
 CREATE TABLE VitalSignsEntity (
   vital_signs_id TEXT PRIMARY KEY NOT NULL,
-  encounter_id TEXT NOT NULL REFERENCES EncounterEntity(encounter_id) ON DELETE CASCADE,
+  encounter_id TEXT NOT NULL UNIQUE,
   weight_kg REAL,
   temperature_c REAL,
   systolic_bp INTEGER,
@@ -51,7 +52,7 @@ CREATE TABLE VitalSignsEntity (
 
 CREATE TABLE DiagnosisEntity (
   diagnosis_id TEXT PRIMARY KEY NOT NULL,
-  encounter_id TEXT NOT NULL REFERENCES EncounterEntity(encounter_id) ON DELETE CASCADE,
+  encounter_id TEXT NOT NULL,
   diagnosis_text TEXT NOT NULL,
   is_primary INTEGER NOT NULL DEFAULT 0,
   code_system TEXT,
@@ -60,7 +61,7 @@ CREATE TABLE DiagnosisEntity (
 
 CREATE TABLE MedicationOrderEntity (
   medication_order_id TEXT PRIMARY KEY NOT NULL,
-  encounter_id TEXT NOT NULL REFERENCES EncounterEntity(encounter_id) ON DELETE CASCADE,
+  encounter_id TEXT NOT NULL,
   medication_name TEXT NOT NULL,
   dose TEXT,
   route TEXT,
@@ -71,27 +72,99 @@ CREATE TABLE MedicationOrderEntity (
 
 CREATE TABLE EncounterOutcomeEntity (
   outcome_id TEXT PRIMARY KEY NOT NULL,
-  encounter_id TEXT NOT NULL UNIQUE REFERENCES EncounterEntity(encounter_id) ON DELETE CASCADE,
+  encounter_id TEXT NOT NULL UNIQUE,
   disposition TEXT NOT NULL,
   referral_to TEXT,
   admitted INTEGER NOT NULL DEFAULT 0,
   discharge_notes TEXT
 );
 
-CREATE INDEX encounter_patient_datetime_idx ON EncounterEntity(patient_id, encounter_datetime);
-CREATE INDEX encounter_department_datetime_idx ON EncounterEntity(department, encounter_datetime);
+-- Program extension tables
+CREATE TABLE OpdVisitEntity (
+  opd_id TEXT PRIMARY KEY NOT NULL,
+  encounter_id TEXT NOT NULL UNIQUE,
+  age_months INTEGER,
+  age_years INTEGER,
+  residence TEXT NOT NULL,
+  danger_signs INTEGER NOT NULL DEFAULT 0,
+  muac_status TEXT,
+  primary_diagnosis TEXT NOT NULL,
+  treatment TEXT NOT NULL
+);
 
--- Sync Queue for offline changes
+CREATE TABLE AncVisitEntity (
+  anc_id TEXT PRIMARY KEY NOT NULL,
+  encounter_id TEXT NOT NULL UNIQUE,
+  parity INTEGER NOT NULL,
+  gravida INTEGER NOT NULL,
+  lmp_date TEXT NOT NULL,
+  edd_date TEXT NOT NULL,
+  visit_number INTEGER NOT NULL,
+  gestational_age INTEGER,
+  fundal_height INTEGER,
+  urinalysis_protein TEXT,
+  hiv_status TEXT,
+  iptp_dose INTEGER,
+  ifa_dispensed INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE MaternityDeliveryEntity (
+  mat_id TEXT PRIMARY KEY NOT NULL,
+  encounter_id TEXT NOT NULL UNIQUE,
+  admission_datetime TEXT NOT NULL,
+  delivery_datetime TEXT,
+  presentation TEXT,
+  delivery_mode TEXT,
+  blood_loss_ml INTEGER,
+  infant_sex TEXT,
+  birth_weight_g INTEGER,
+  delivery_outcome TEXT,
+  apgar_1min INTEGER,
+  apgar_5min INTEGER,
+  oxytocin_given INTEGER NOT NULL DEFAULT 0,
+  discharge_maternal TEXT
+);
+
+CREATE TABLE CccVisitEntity (
+  ccc_number TEXT PRIMARY KEY NOT NULL,
+  encounter_id TEXT NOT NULL UNIQUE,
+  art_start_date TEXT NOT NULL,
+  entry_point TEXT,
+  baseline_who_stage TEXT,
+  current_regimen TEXT,
+  regimen_change_date TEXT,
+  cohort_status TEXT,
+  viral_load_value INTEGER,
+  vl_collection_date TEXT,
+  adherence_rating TEXT
+);
+
+CREATE TABLE NcdFollowupEntity (
+  ncd_followup_id TEXT PRIMARY KEY NOT NULL,
+  encounter_id TEXT NOT NULL UNIQUE,
+  ncd_id TEXT NOT NULL,
+  systolic_bp INTEGER,
+  diastolic_bp INTEGER,
+  fbs_mmol REAL,
+  rbs_mmol REAL,
+  hba1c_percent REAL,
+  weight_kg REAL,
+  creatinine_value INTEGER,
+  meds_dispensed TEXT,
+  refill_qty_days INTEGER,
+  complications TEXT
+);
+
+-- Sync queue
 CREATE TABLE SyncQueueEntity (
   id TEXT PRIMARY KEY NOT NULL,
   entityType TEXT NOT NULL,
   entityId TEXT NOT NULL,
-  operation TEXT NOT NULL, -- INSERT, UPDATE, DELETE
-  payload TEXT NOT NULL, -- JSON
+  operation TEXT NOT NULL,
+  payload TEXT NOT NULL,
   createdAt TEXT NOT NULL
 );
 
--- Queries for Staff
 selectAllStaff:
 SELECT * FROM StaffMemberEntity;
 
@@ -99,23 +172,12 @@ insertStaff:
 INSERT OR REPLACE INTO StaffMemberEntity(id, fullName, role, department, pin, active, lastUpdated)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
--- Queries for Patients
-selectAllPatients:
-SELECT * FROM PatientEntity;
-
-insertPatient:
-INSERT OR REPLACE INTO PatientEntity(id, fullName, age, sex, status, assignedWard, roomBed, acuity, isolation, version, syncedAt)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
--- Queries for Encounters
-selectEncountersByPatient:
-SELECT * FROM EncounterEntity
-WHERE patient_id = ?
-ORDER BY encounter_datetime DESC;
-
 insertEncounter:
-INSERT OR REPLACE INTO EncounterEntity(encounter_id, patient_id, encounter_datetime, department, visit_type, provider_id, facility_id)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO EncounterEntity(encounter_id, patient_id, encounter_datetime, department, visit_type, provider_id, facility_id, sync_state)
+VALUES (?, ?, ?, ?, ?, ?, ?, 'LOCAL_ONLY');
+
+selectEncountersByPatient:
+SELECT * FROM EncounterEntity WHERE patient_id = ? ORDER BY encounter_datetime DESC;
 
 deleteEncounter:
 DELETE FROM EncounterEntity WHERE encounter_id = ?;
@@ -125,14 +187,14 @@ INSERT OR REPLACE INTO VitalSignsEntity(vital_signs_id, encounter_id, weight_kg,
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectVitalSignsByEncounter:
-SELECT * FROM VitalSignsEntity WHERE encounter_id = ? ORDER BY recorded_at DESC;
+SELECT * FROM VitalSignsEntity WHERE encounter_id = ?;
 
 insertDiagnosis:
 INSERT OR REPLACE INTO DiagnosisEntity(diagnosis_id, encounter_id, diagnosis_text, is_primary, code_system, diagnosis_code)
 VALUES (?, ?, ?, ?, ?, ?);
 
 selectDiagnosisByEncounter:
-SELECT * FROM DiagnosisEntity WHERE encounter_id = ? ORDER BY is_primary DESC;
+SELECT * FROM DiagnosisEntity WHERE encounter_id = ?;
 
 insertMedicationOrder:
 INSERT OR REPLACE INTO MedicationOrderEntity(medication_order_id, encounter_id, medication_name, dose, route, frequency, duration, instructions)
@@ -148,9 +210,12 @@ VALUES (?, ?, ?, ?, ?, ?);
 selectEncounterOutcome:
 SELECT * FROM EncounterOutcomeEntity WHERE encounter_id = ?;
 
--- Queries for Sync Queue
 selectPendingSync:
 SELECT * FROM SyncQueueEntity ORDER BY createdAt ASC;
+
+insertSyncItem:
+INSERT OR REPLACE INTO SyncQueueEntity(id, entityType, entityId, operation, payload, createdAt)
+VALUES (?, ?, ?, ?, ?, ?);
 
 deleteSyncItem:
 DELETE FROM SyncQueueEntity WHERE id = ?;

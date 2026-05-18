@@ -164,6 +164,17 @@ fun Application.hospitalApi() {
                 call.respond(state.pendingStkRequests())
             }
 
+
+            // ── Reporting endpoints ────────────────────────────────────────────────
+            get("/reports/{report}") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.AUDIT_VIEW)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Report access denied"))
+                    return@get
+                }
+                val report = call.parameters["report"].orEmpty()
+                call.respondReport(report)
+            }
             // ── Admin endpoints ────────────────────────────────────────────────────
             get("/admin/audit-trail") {
                 val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()

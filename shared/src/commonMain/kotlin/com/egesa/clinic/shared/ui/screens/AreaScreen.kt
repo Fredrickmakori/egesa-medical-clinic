@@ -563,7 +563,7 @@ private fun ConsultationScreen() {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(selected.fullName, style = MaterialTheme.typography.headlineSmall, color = Slate900)
-                        Text("${selected.id}  ·  ${selected.age} yrs, ${selected.sex}",
+                        Text("${selected.id}  ·  ${selected.age} yrs, ${selected.sex.code}",
                             style = MaterialTheme.typography.bodySmall, color = Slate500)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

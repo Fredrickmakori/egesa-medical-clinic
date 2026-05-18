@@ -176,7 +176,7 @@ fun PatientCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${patient.id}  •  ${patient.age} yrs, ${patient.sex}",
+                    "${patient.id}  •  ${patient.age} yrs, ${patient.sex.code}",
                     style = MaterialTheme.typography.bodySmall,
                     color = Slate500,
                 )

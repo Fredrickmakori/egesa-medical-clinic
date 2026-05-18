@@ -2,6 +2,46 @@ package com.egesa.clinic.shared
 
 import kotlinx.serialization.Serializable
 
+interface CodeEnum { val code: String }
+
+object DomainValidation {
+    fun requireCode(field: String, value: String, allowed: Set<String>): String {
+        val normalized = value.trim().lowercase().replace("_", "-").replace(" ", "-")
+        require(normalized in allowed) { "Invalid $field: '$value'" }
+        return normalized
+    }
+}
+
+@JvmInline
+@Serializable
+value class LegacyMappableCode private constructor(val value: String) {
+    companion object {
+        fun from(field: String, raw: String, aliases: Map<String, String>, allowed: Set<String>): LegacyMappableCode {
+            val normalized = raw.trim().lowercase().replace("_", "-").replace(" ", "-")
+            val mapped = aliases[normalized] ?: normalized
+            return LegacyMappableCode(DomainValidation.requireCode(field, mapped, allowed))
+        }
+    }
+}
+
+enum class Sex(override val code: String) : CodeEnum { MALE("male"), FEMALE("female"), INTERSEX("intersex"), UNKNOWN("unknown") }
+enum class VisitType(override val code: String) : CodeEnum { OUTPATIENT("outpatient"), INPATIENT("inpatient"), EMERGENCY("emergency"), FOLLOW_UP("follow-up"), ANC("anc") }
+enum class Disposition(override val code: String) : CodeEnum { ADMITTED("admitted"), DISCHARGED("discharged"), TRANSFERRED("transferred"), REFERRED("referred"), DECEASED("deceased") }
+enum class FetalPresentation(override val code: String) : CodeEnum { CEPHALIC("cephalic"), BREECH("breech"), TRANSVERSE("transverse"), OBLIQUE("oblique"), UNKNOWN("unknown") }
+enum class DeliveryMode(override val code: String) : CodeEnum { SVD("svd"), ASSISTED_VAGINAL("assisted-vaginal"), CESAREAN("cesarean"), VBAC("vbac") }
+enum class DeliveryOutcome(override val code: String) : CodeEnum { LIVE_BIRTH("live-birth"), STILL_BIRTH("still-birth"), NEONATAL_DEATH("neonatal-death") }
+enum class WhoStage(override val code: String) : CodeEnum { STAGE_1("stage-1"), STAGE_2("stage-2"), STAGE_3("stage-3"), STAGE_4("stage-4") }
+enum class HivStatus(override val code: String) : CodeEnum { POSITIVE("positive"), NEGATIVE("negative"), UNKNOWN("unknown"), EXPOSED("exposed") }
+enum class AdherenceRating(override val code: String) : CodeEnum { GOOD("good"), FAIR("fair"), POOR("poor") }
+enum class CohortStatus(override val code: String) : CodeEnum { ACTIVE("active"), LOST_TO_FOLLOW_UP("lost-to-follow-up"), TRANSFERRED_OUT("transferred-out"), DECEASED("deceased"), STOPPED("stopped") }
+enum class MuacStatus(override val code: String) : CodeEnum { GREEN("green"), YELLOW("yellow"), RED("red") }
+enum class Complication(override val code: String) : CodeEnum { NONE("none"), FEVER("fever"), HEMORRHAGE("hemorrhage"), SEPSIS("sepsis"), ECLAMPSIA("eclampsia"), OTHER("other") }
+
+object LegacyCodeMapper {
+    private fun <T : Enum<T>> codeSet(values: Array<T>): Set<String> where T : CodeEnum = values.map { it.code }.toSet()
+    fun sex(raw: String): Sex = Sex.entries.first { it.code == LegacyMappableCode.from("sex", raw, mapOf("m" to "male", "f" to "female"), codeSet(Sex.entries.toTypedArray())).value }
+}
+
 // ── Permission-based access control ────────────────────────────────────────
 enum class Permission {
     // Patient management
@@ -113,7 +153,7 @@ data class Patient(
     val id: String,
     val fullName: String,
     val age: Int,
-    val sex: String,
+    val sex: Sex,
     val status: String,
     val assignedWard: String? = null,
     val roomBed: String? = null,

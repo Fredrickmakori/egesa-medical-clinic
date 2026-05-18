@@ -1,6 +1,7 @@
 package com.egesa.clinic.shared.data
 
 import com.egesa.clinic.shared.*
+import com.egesa.clinic.shared.sync.SyncHealthStatus
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 
@@ -173,14 +174,15 @@ object FakeRepository {
     /**
      * Get sync health status from server
      */
-    suspend fun getSyncHealth(): Result<Map<String, String>> {
+    suspend fun getSyncHealth(): Result<SyncHealthStatus> {
         return try {
             delay(200)
+            // Backend route is explicitly defined under payments in the current API spec.
             // TODO: GET /payments/sync-health
-            Result.success(mapOf(
-                "status" to "healthy",
-                "pendingReconciliation" to "0",
-                "lastSync" to Clock.System.now().toEpochMilliseconds().toString()
+            Result.success(SyncHealthStatus(
+                status = "healthy",
+                pendingCount = 0,
+                lastSyncTime = Clock.System.now().toEpochMilliseconds()
             ))
         } catch (e: Exception) {
             Result.failure(e)

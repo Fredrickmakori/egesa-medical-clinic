@@ -1,5 +1,7 @@
 package com.egesa.clinic.shared
 
+import com.egesa.clinic.shared.sync.SyncHealthStatus
+
 import kotlin.jvm.JvmInline
 import kotlinx.serialization.Serializable
 
@@ -395,9 +397,10 @@ class HospitalState {
         pendingStk.removeAll { requestId -> lookup(requestId) != StkRequestStatus.PENDING }
     }
 
-    fun syncHealth(): Map<String, String> = mapOf(
-        "status" to "healthy",
-        "pendingReconciliation" to pendingStk.size.toString()
+    fun syncHealth(): SyncHealthStatus = SyncHealthStatus(
+        status = "healthy",
+        pendingCount = pendingStk.size,
+        lastSyncTime = System.currentTimeMillis()
     )
 
     fun pendingStkRequests(): List<String> = pendingStk.toList()

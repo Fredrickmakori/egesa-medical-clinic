@@ -1,5 +1,6 @@
 package com.egesa.clinic.shared
 
+import kotlin.jvm.JvmInline
 import kotlinx.serialization.Serializable
 
 interface CodeEnum { val code: String }

@@ -9,7 +9,10 @@ import com.egesa.clinic.shared.db.DatabaseDriverFactory
 fun main() {
     val databaseDriverFactory = DatabaseDriverFactory()
 
-    ComposeViewport(document.body!!) {
+    val root = document.getElementById("root") ?: document.body!!
+    root.className = "" // Clear loading state
+
+    ComposeViewport(root) {
         ClinicApp(
             platform = ClientPlatform.Desktop,  // Web uses desktop-like UI layout
             databaseDriverFactory = databaseDriverFactory

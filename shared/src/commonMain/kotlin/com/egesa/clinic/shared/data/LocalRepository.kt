@@ -3,7 +3,8 @@ package com.egesa.clinic.shared.data
 import com.egesa.clinic.shared.StaffMember
 import com.egesa.clinic.shared.UserRole
 import com.egesa.clinic.shared.db.ClinicDatabase
-import com.egesa.clinic.shared.db.DatabaseDriverFactory
+import app.cash.sqldelight.async.coroutines.awaitAsList
+import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
 import kotlinx.datetime.Clock
 
 data class EncounterInput(
@@ -59,16 +60,12 @@ data class EncounterOutcomeInput(
     val dischargeNotes: String? = null
 )
 
-class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
-
-    private val database = ClinicDatabase(
-        driver = databaseDriverFactory.createDriver()
-    )
+class LocalRepository(database: ClinicDatabase) {
 
     private val dbQueries = database.clinicDatabaseQueries
 
-    fun getAllStaff(): List<StaffMember> {
-        return dbQueries.selectAllStaff().executeAsList().map {
+    suspend fun getAllStaff(): List<StaffMember> {
+        return dbQueries.selectAllStaff().awaitAsList().map {
             StaffMember(
                 id = it.id,
                 fullName = it.fullName,
@@ -78,19 +75,19 @@ class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
         }
     }
 
-    fun insertStaff(staff: StaffMember, pin: String? = null) {
+    suspend fun insertStaff(staff: StaffMember, pin: String? = null) {
         dbQueries.insertStaff(
             id = staff.id,
             fullName = staff.fullName,
             role = staff.role.name,
             department = staff.department,
             pin = pin,
-            active =1,
+            active = 1,
             lastUpdated = Clock.System.now().toString()
         )
     }
 
-    fun createEncounter(input: EncounterInput) {
+    suspend fun createEncounter(input: EncounterInput) {
         dbQueries.insertEncounter(
             encounter_id = input.encounterId,
             patient_id = input.patientId,
@@ -103,14 +100,14 @@ class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
         queueSync("EncounterEntity", input.encounterId, "UPSERT", "{}")
     }
 
-    fun getEncountersByPatient(patientId: String) =
-        dbQueries.selectEncountersByPatient(patient_id = patientId).executeAsList()
+    suspend fun getEncountersByPatient(patientId: String) =
+        dbQueries.selectEncountersByPatient(patient_id = patientId).awaitAsList()
 
-    fun deleteEncounter(encounterId: String) {
+    suspend fun deleteEncounter(encounterId: String) {
         dbQueries.deleteEncounter(encounter_id = encounterId)
     }
 
-    fun upsertVitalSigns(input: VitalSignsInput) {
+    suspend fun upsertVitalSigns(input: VitalSignsInput) {
         dbQueries.insertVitalSigns(
             vital_signs_id = input.vitalSignsId,
             encounter_id = input.encounterId,
@@ -126,24 +123,24 @@ class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
         )
     }
 
-    fun getVitalSignsByEncounter(encounterId: String) =
-        dbQueries.selectVitalSignsByEncounter(encounter_id = encounterId).executeAsList()
+    suspend fun getVitalSignsByEncounter(encounterId: String) =
+        dbQueries.selectVitalSignsByEncounter(encounter_id = encounterId).awaitAsList()
 
-    fun upsertDiagnosis(input: DiagnosisInput) {
+    suspend fun upsertDiagnosis(input: DiagnosisInput) {
         dbQueries.insertDiagnosis(
             diagnosis_id = input.diagnosisId,
             encounter_id = input.encounterId,
             diagnosis_text = input.diagnosisText,
-            is_primary = if (input.isPrimary) 1 else 0,
+            is_primary = if (input.isPrimary) 1L else 0L,
             code_system = input.codeSystem,
             diagnosis_code = input.diagnosisCode
         )
     }
 
-    fun getDiagnosisByEncounter(encounterId: String) =
-        dbQueries.selectDiagnosisByEncounter(encounter_id = encounterId).executeAsList()
+    suspend fun getDiagnosisByEncounter(encounterId: String) =
+        dbQueries.selectDiagnosisByEncounter(encounter_id = encounterId).awaitAsList()
 
-    fun upsertMedicationOrder(input: MedicationOrderInput) {
+    suspend fun upsertMedicationOrder(input: MedicationOrderInput) {
         dbQueries.insertMedicationOrder(
             medication_order_id = input.medicationOrderId,
             encounter_id = input.encounterId,
@@ -156,27 +153,27 @@ class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
         )
     }
 
-    fun getMedicationOrdersByEncounter(encounterId: String) =
-        dbQueries.selectMedicationOrdersByEncounter(encounter_id = encounterId).executeAsList()
+    suspend fun getMedicationOrdersByEncounter(encounterId: String) =
+        dbQueries.selectMedicationOrdersByEncounter(encounter_id = encounterId).awaitAsList()
 
-    fun upsertEncounterOutcome(input: EncounterOutcomeInput) {
+    suspend fun upsertEncounterOutcome(input: EncounterOutcomeInput) {
         dbQueries.upsertEncounterOutcome(
             outcome_id = input.outcomeId,
             encounter_id = input.encounterId,
             disposition = input.disposition,
             referral_to = input.referralTo,
-            admitted = if (input.admitted) 1 else 0,
+            admitted = if (input.admitted) 1L else 0L,
             discharge_notes = input.dischargeNotes
         )
     }
 
-    fun getEncounterOutcome(encounterId: String) =
-        dbQueries.selectEncounterOutcome(encounter_id = encounterId).executeAsOneOrNull()
+    suspend fun getEncounterOutcome(encounterId: String) =
+        dbQueries.selectEncounterOutcome(encounter_id = encounterId).awaitAsOneOrNull()
 
 
-    fun queueSync(entityType: String, entityId: String, operation: String, payload: String) {
+    suspend fun queueSync(entityType: String, entityId: String, operation: String, payload: String) {
         dbQueries.insertSyncItem(
-            id = "SYNC-${'$'}{Clock.System.now().toEpochMilliseconds()}-${'$'}entityId",
+            id = "SYNC-${Clock.System.now().toEpochMilliseconds()}-$entityId",
             entityType = entityType,
             entityId = entityId,
             operation = operation,
@@ -185,13 +182,13 @@ class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
         )
     }
 
-    fun getPendingSync() = dbQueries.selectPendingSync().executeAsList()
+    suspend fun getPendingSync() = dbQueries.selectPendingSync().awaitAsList()
 
-    fun deleteSyncItem(id: String) {
+    suspend fun deleteSyncItem(id: String) {
         dbQueries.deleteSyncItem(id = id)
     }
 
-    fun seedAdminIfEmpty() {
+    suspend fun seedAdminIfEmpty() {
         if (getAllStaff().none { it.role == UserRole.ADMIN }) {
             insertStaff(
                 StaffMember(
@@ -205,3 +202,4 @@ class LocalRepository(databaseDriverFactory: DatabaseDriverFactory) {
         }
     }
 }
+

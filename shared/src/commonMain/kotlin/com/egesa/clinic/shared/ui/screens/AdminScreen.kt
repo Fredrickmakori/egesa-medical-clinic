@@ -17,6 +17,14 @@ fun AdminScreen(localRepository: LocalRepository) {
     var staffList by remember { mutableStateOf(localRepository.getAllStaff()) }
     var showAddDialog by remember { mutableStateOf(false) }
 
+    var reportType by remember { mutableStateOf("moh204_monthly_opd") }
+    var fromMonth by remember { mutableStateOf("") }
+    var toMonth by remember { mutableStateOf("") }
+    var department by remember { mutableStateOf("") }
+    var program by remember { mutableStateOf("") }
+    var exportFormat by remember { mutableStateOf("json") }
+    var generatedPath by remember { mutableStateOf("") }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -26,6 +34,43 @@ fun AdminScreen(localRepository: LocalRepository) {
             Text("Staff Management", style = MaterialTheme.typography.headlineMedium)
             Button(onClick = { showAddDialog = true }) {
                 Text("Add Staff")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Monthly MOH Reporting", style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(value = reportType, onValueChange = { reportType = it }, label = { Text("Report view") })
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = fromMonth, onValueChange = { fromMonth = it }, label = { Text("From (YYYY-MM)") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(value = toMonth, onValueChange = { toMonth = it }, label = { Text("To (YYYY-MM)") }, modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = department, onValueChange = { department = it }, label = { Text("Department filter") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(value = program, onValueChange = { program = it }, label = { Text("Program filter") }, modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { exportFormat = "json" }) { Text("JSON") }
+                    Button(onClick = { exportFormat = "csv" }) { Text("CSV") }
+                    Button(onClick = {
+                        generatedPath = buildString {
+                            append("/reports/")
+                            append(reportType)
+                            append("?fromMonth=")
+                            append(fromMonth)
+                            append("&toMonth=")
+                            append(toMonth)
+                            if (department.isNotBlank()) append("&department=$department")
+                            if (program.isNotBlank()) append("&program=$program")
+                            append("&format=$exportFormat")
+                        }
+                    }) { Text("Generate / Download") }
+                }
+                if (generatedPath.isNotBlank()) {
+                    Text("Use endpoint: $generatedPath", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
 
@@ -73,7 +118,7 @@ fun AddStaffDialog(onDismiss: () -> Unit, onConfirm: (StaffMember, String) -> Un
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Full Name") })
                 OutlinedTextField(value = department, onValueChange = { department = it }, label = { Text("Department") })
                 OutlinedTextField(value = pin, onValueChange = { pin = it }, label = { Text("Initial PIN") })
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Role", style = MaterialTheme.typography.labelMedium)
                 UserRole.entries.forEach { r ->

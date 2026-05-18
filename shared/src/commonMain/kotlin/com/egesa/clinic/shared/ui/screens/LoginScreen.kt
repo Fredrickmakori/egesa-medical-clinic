@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.UserRole
 import com.egesa.clinic.shared.StaffMember
+import com.egesa.clinic.shared.data.FakeRepository
 import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.ui.components.RoleBadge
 import com.egesa.clinic.shared.ui.navigation.SessionState
@@ -34,9 +35,22 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
     var pin        by remember { mutableStateOf("") }
     var error      by remember { mutableStateOf<String?>(null) }
     var validating by remember { mutableStateOf(false) }
+    var loadingStaff by remember { mutableStateOf(true) }
+    var staffLoadError by remember { mutableStateOf<String?>(null) }
+    var reloadToken by remember { mutableStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        allStaff = localRepository.getAllStaff()
+    LaunchedEffect(reloadToken) {
+        loadingStaff = true
+        staffLoadError = null
+        try {
+            val localStaff = localRepository.getAllStaff()
+            allStaff = if (localStaff.isNotEmpty()) localStaff else FakeRepository.getStaff()
+        } catch (e: Exception) {
+            allStaff = emptyList()
+            staffLoadError = "Unable to load staff list. Please retry or check connectivity."
+        } finally {
+            loadingStaff = false
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Navy900)) {
@@ -82,8 +96,11 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
             ) {
                 if (picked == null) {
                     StaffSelector(
-                        allStaff  = allStaff,
-                        onPick    = { picked = it; pin = ""; error = null },
+                        allStaff = allStaff,
+                        loading = loadingStaff,
+                        loadError = staffLoadError,
+                        onRetry = { reloadToken++ },
+                        onPick = { picked = it; pin = ""; error = null },
                     )
                 } else {
                     PinEntry(
@@ -123,6 +140,9 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
 @Composable
 private fun StaffSelector(
     allStaff: List<StaffMember>,
+    loading: Boolean,
+    loadError: String?,
+    onRetry: () -> Unit,
     onPick: (StaffMember) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -170,10 +190,26 @@ private fun StaffSelector(
         )
 
         // Staff list
-        if (allStaff.isEmpty()) {
-            // Still loading
+        if (loading) {
             Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Teal500, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+            }
+        } else if (loadError != null) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(SidebarActive).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(loadError, fontSize = 13.sp, color = Color(0xFFFFB4AB))
+                OutlinedButton(onClick = onRetry) { Text("Retry") }
+            }
+        } else if (allStaff.isEmpty()) {
+            Box(
+                Modifier.fillMaxWidth().height(120.dp)
+                    .clip(RoundedCornerShape(8.dp)).background(SidebarActive),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("No staff profiles are available.", fontSize = 13.sp, color = Navy200)
             }
         } else if (filtered.isEmpty()) {
             Box(

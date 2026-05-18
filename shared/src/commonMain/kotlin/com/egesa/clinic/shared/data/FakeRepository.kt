@@ -14,7 +14,14 @@ object FakeRepository {
      */
     var useMockFallback: Boolean = false
 
-    private var clinicApi: ClinicApi? = null
+    /**
+     * Source of truth for non-production builds is a seeded fixture so login works offline/demo-first.
+     * When backend integration is ready, replace with GET /staff and keep this as fallback data.
+     */
+    suspend fun getStaff(): List<StaffMember> {
+        delay(300)
+        return STAFF_MEMBERS
+    }
 
     fun installClinicApi(api: ClinicApi) {
         clinicApi = api
@@ -145,4 +152,11 @@ class RepositoryHttpException(val statusCode: Int, val responseBody: String) : E
     "HTTP $statusCode: ${responseBody.ifBlank { "No response body" }}"
 )
 
-val STAFF_MEMBERS = emptyList<StaffMember>()
+val STAFF_MEMBERS = listOf(
+    StaffMember("DOC-001", "Dr. Aisha Nambala", UserRole.DOCTOR, "General Medicine"),
+    StaffMember("DOC-002", "Dr. Michael Odongo", UserRole.DOCTOR, "Pediatrics"),
+    StaffMember("NRS-001", "Nurse Grace Atieno", UserRole.NURSE, "Maternity Ward"),
+    StaffMember("NRS-002", "Nurse Peter Wekesa", UserRole.NURSE, "Emergency Department"),
+    StaffMember("RCP-001", "Sarah Namutebi", UserRole.RECEPTIONIST, "Front Desk"),
+    StaffMember("ADM-001", "Joseph Kato", UserRole.ADMIN, "Administration")
+)

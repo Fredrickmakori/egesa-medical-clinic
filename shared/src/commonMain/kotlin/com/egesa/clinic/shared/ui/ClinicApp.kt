@@ -12,7 +12,11 @@ enum class ClientPlatform { Desktop, Tablet }
 
 @Composable
 fun ClinicApp(@Suppress("UNUSED_PARAMETER") platform: ClientPlatform, databaseDriverFactory: DatabaseDriverFactory) {
-    val localRepository = remember { LocalRepository(databaseDriverFactory).apply { seedAdminIfEmpty() } }
+    val localRepository = remember { LocalRepository(databaseDriverFactory) }
+    
+    LaunchedEffect(Unit) {
+        localRepository.seedAdminIfEmpty()
+    }
     
     ClinicTheme {
         var session by remember { mutableStateOf<SessionState?>(null) }

@@ -11,11 +11,17 @@ import androidx.compose.ui.unit.dp
 import com.egesa.clinic.shared.StaffMember
 import com.egesa.clinic.shared.UserRole
 import com.egesa.clinic.shared.data.LocalRepository
+import kotlinx.coroutines.launch
 
 @Composable
 fun AdminScreen(localRepository: LocalRepository) {
-    var staffList by remember { mutableStateOf(localRepository.getAllStaff()) }
+    var staffList by remember { mutableStateOf(emptyList<StaffMember>()) }
     var showAddDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        staffList = localRepository.getAllStaff()
+    }
 
     var reportType by remember { mutableStateOf("moh204_monthly_opd") }
     var fromMonth by remember { mutableStateOf("") }
@@ -93,9 +99,11 @@ fun AdminScreen(localRepository: LocalRepository) {
         AddStaffDialog(
             onDismiss = { showAddDialog = false },
             onConfirm = { newStaff, pin ->
-                localRepository.insertStaff(newStaff, pin)
-                staffList = localRepository.getAllStaff()
-                showAddDialog = false
+                scope.launch {
+                    localRepository.insertStaff(newStaff, pin)
+                    staffList = localRepository.getAllStaff()
+                    showAddDialog = false
+                }
             }
         )
     }

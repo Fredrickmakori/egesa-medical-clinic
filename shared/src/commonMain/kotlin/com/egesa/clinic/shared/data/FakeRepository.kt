@@ -5,169 +5,114 @@ import com.egesa.clinic.shared.sync.SyncHealthStatus
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 
-/**
- * Simulates async API calls. Each function adds a short delay to mimic network latency.
- * Replace the body of each function with a real Ktor HTTP call once the FastAPI backend is ready.
- */
 object FakeRepository {
 
     private val db = HospitalState()
 
+    /**
+     * Enable local mock fallback for development and offline testing.
+     */
+    var useMockFallback: Boolean = false
+
+    private var clinicApi: ClinicApi? = null
+
+    fun installClinicApi(api: ClinicApi) {
+        clinicApi = api
+    }
+
+    private fun requireApi(): ClinicApi = clinicApi ?: error("ClinicApi is not configured. Call FakeRepository.installClinicApi(...) during app startup.")
+
     // ── Staff ──────────────────────────────────────────────────────────────────
 
-    suspend fun getStaff(): List<StaffMember> {
-        delay(300)
-        return STAFF_MEMBERS
+    suspend fun getStaff(): List<StaffMember> = STAFF_MEMBERS
+
+    suspend fun validatePin(staffId: String, pin: String): Boolean = apiOrFallback({
+        requireApi().validatePin(staffId, pin).authenticated
+    }) {
+        pin.length >= 4
     }
 
-    suspend fun validatePin(staffId: String, pin: String): Boolean {
-        delay(500) // simulate auth round-trip
-        // TODO: POST /auth/login  { staff_id, pin_hash }
-        return pin.length >= 4  // placeholder — accept any PIN >= 4 digits
+    suspend fun getPatients(): List<Patient> = apiOrFallback({
+        requireApi().getPatients().map { it.toDomain() }
+    }) { db.allPatients() }
+
+    suspend fun getPatient(id: String): Patient? = apiOrFallback({
+        requireApi().getPatient(id)?.toDomain()
+    }) { db.allPatients().find { it.id == id } }
+
+    suspend fun getQueue(): List<QueueItem> = apiOrFallback({
+        requireApi().getQueue().map { it.toDomain() }
+    }) { db.receptionQueue() }
+
+    suspend fun getKpis(): List<DashboardMetric> = apiOrFallback({
+        requireApi().getKpis().map { it.toDomain() }
+    }) { db.adminKpis() }
+
+    suspend fun getBottlenecks(): List<BottleneckCell> = apiOrFallback({
+        requireApi().getBottlenecks().map { it.toDomain() }
+    }) { db.bottleneckHeatmap() }
+
+    suspend fun getRegistrationTrend(): List<TrendPoint> = apiOrFallback({
+        requireApi().getRegistrationTrend().map { it.toDomain() }
+    }) { db.registrationTrend() }
+
+    suspend fun getWardOverview(): WardOverview = apiOrFallback({
+        requireApi().getWardOverview().toDomain()
+    }) { db.wardOverview() }
+
+    suspend fun getBedBoard(): List<BedCard> = apiOrFallback({
+        requireApi().getBedBoard().map { it.toDomain() }
+    }) { db.bedBoard() }
+
+    suspend fun getNursingTasks(): List<NursingTask> = apiOrFallback({
+        requireApi().getNursingTasks().map { it.toDomain() }
+    }) { db.nursingTasks() }
+
+    suspend fun getWardCensus(): List<WardCensusRow> = apiOrFallback({
+        requireApi().getWardCensus().map { it.toDomain() }
+    }) { db.wardCensus() }
+
+    suspend fun getAtdState(): AdmissionTransferDischargeState = apiOrFallback({
+        requireApi().getAtdState().toDomain()
+    }) { db.atdState() }
+
+    suspend fun getShiftHandoff(shift: Shift): List<String> = apiOrFallback({
+        requireApi().getShiftHandoff(shift)
+    }) { db.shiftHandoffSummary(shift) }
+
+    suspend fun syncPatientData(remoteVersion: Long = 0): Result<SyncPatientDataResponse> = runResultOrFallback({
+        requireApi().syncPatientData(remoteVersion).toDomain()
+    }) {
+        val patients = db.allPatients()
+        SyncPatientDataResponse(patients = patients, remoteVersion = remoteVersion, count = patients.size)
     }
 
-    // ── Patients ──────────────────────────────────────────────────────────────
-
-    suspend fun getPatients(): List<Patient> {
-        delay(350)
-        // TODO: GET /patients
-        return db.allPatients()
+    suspend fun uploadPatientChanges(changes: List<Patient>): Result<List<SyncResultItem>> = runResultOrFallback({
+        requireApi().uploadPatientChanges(changes.map { it.toDto() }).map { it.toDomain() }
+    }) {
+        changes.map { SyncResultItem(id = it.id, status = "synced", version = 1) }
     }
 
-    suspend fun getPatient(id: String): Patient? {
-        delay(200)
-        // TODO: GET /patients/{id}
-        return db.allPatients().find { it.id == id }
-    }
-
-    // ── Reception ─────────────────────────────────────────────────────────────
-
-    suspend fun getQueue(): List<QueueItem> {
-        delay(250)
-        // TODO: GET /queue
-        return db.receptionQueue()
-    }
-
-    // ── Dashboard ─────────────────────────────────────────────────────────────
-
-    suspend fun getKpis(): List<DashboardMetric> {
-        delay(300)
-        // TODO: GET /dashboard/kpis
-        return db.adminKpis()
-    }
-
-    suspend fun getBottlenecks(): List<BottleneckCell> {
-        delay(250)
-        // TODO: GET /dashboard/bottlenecks
-        return db.bottleneckHeatmap()
-    }
-
-    suspend fun getRegistrationTrend(): List<TrendPoint> {
-        delay(200)
-        // TODO: GET /dashboard/trend
-        return db.registrationTrend()
-    }
-
-    // ── Wards ─────────────────────────────────────────────────────────────────
-
-    suspend fun getWardOverview(): WardOverview {
-        delay(200)
-        // TODO: GET /wards/overview
-        return db.wardOverview()
-    }
-
-    suspend fun getBedBoard(): List<BedCard> {
-        delay(300)
-        // TODO: GET /wards/beds
-        return db.bedBoard()
-    }
-
-    suspend fun getNursingTasks(): List<NursingTask> {
-        delay(200)
-        // TODO: GET /wards/tasks
-        return db.nursingTasks()
-    }
-
-    suspend fun getWardCensus(): List<WardCensusRow> {
-        delay(200)
-        // TODO: GET /wards/census
-        return db.wardCensus()
-    }
-
-    suspend fun getAtdState(): AdmissionTransferDischargeState {
-        delay(150)
-        // TODO: GET /wards/atd
-        return db.atdState()
-    }
-
-    suspend fun getShiftHandoff(shift: Shift): List<String> {
-        delay(150)
-        // TODO: GET /wards/handoff?shift={shift}
-        return db.shiftHandoffSummary(shift)
-    }
-
-    // ── Cloud Synchronization ──────────────────────────────────────────────────
-
-    /**
-     * Fetch patients from server with delta sync support
-     * Returns: patients data and current remote version
-     */
-    suspend fun syncPatientData(remoteVersion: Long = 0): Result<SyncPatientDataResponse> {
-        return try {
-            delay(500) // Simulate network latency
-            // TODO: GET /sync/patients?version={remoteVersion}
-            val patients = db.allPatients()
-            Result.success(SyncPatientDataResponse(
-                patients = patients,
-                remoteVersion = Clock.System.now().toEpochMilliseconds(),
-                count = patients.size
-            ))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Upload batch of patient changes to server
-     * Used for syncing local modifications back to cloud
-     */
-    suspend fun uploadPatientChanges(changes: List<Patient>): Result<List<SyncResultItem>> {
-        return try {
-            delay(400) // Simulate network latency
-            // TODO: POST /sync/patients/batch
-            val results = changes.map { patient ->
-                SyncResultItem(
-                    id = patient.id,
-                    status = "synced",
-                    version = 1
-                )
-            }
-            Result.success(results)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Resolve a conflict between local and remote versions
-     * Supported strategies: CLIENT_WINS, SERVER_WINS, MERGE
-     */
     suspend fun resolveConflict(
         entityId: String,
         localVersion: Int,
         remoteVersion: Int,
         strategy: String = "SERVER_WINS"
-    ): Result<ConflictResolutionResult> {
-        return try {
-            delay(200) // Simulate network latency
-            // TODO: POST /sync/resolve-conflict
-            Result.success(ConflictResolutionResult(
-                resolved = true,
-                strategy = strategy,
-                finalVersion = maxOf(localVersion, remoteVersion)
-            ))
-        } catch (e: Exception) {
-            Result.failure(e)
+    ): Result<ConflictResolutionResult> = runResultOrFallback({
+        requireApi().resolveConflict(ConflictResolutionRequestDto(entityId, localVersion, remoteVersion, strategy)).toDomain()
+    }) {
+        ConflictResolutionResult(resolved = true, strategy = strategy, finalVersion = maxOf(localVersion, remoteVersion))
+    }
+
+    suspend fun getSyncHealth(): Result<Map<String, String>> = runResultOrFallback({
+        requireApi().getSyncHealth()
+    }) { mapOf("status" to "unknown") }
+
+    private suspend fun <T> apiOrFallback(apiCall: suspend () -> T, fallback: suspend () -> T): T {
+        return if (useMockFallback) {
+            fallback()
+        } else {
+            apiCall()
         }
     }
 
@@ -188,8 +133,16 @@ object FakeRepository {
             Result.failure(e)
         }
     }
+
+    private suspend fun Throwable.toRepositoryException(): Throwable = when (this) {
+        is ClientRequestException -> RepositoryHttpException(response.status.value, response.bodyAsText())
+        is ServerResponseException -> RepositoryHttpException(response.status.value, response.bodyAsText())
+        else -> this
+    }
 }
 
-// ── Staff data ─────────────────────────────────────────────────────────────────
+class RepositoryHttpException(val statusCode: Int, val responseBody: String) : Exception(
+    "HTTP $statusCode: ${responseBody.ifBlank { "No response body" }}"
+)
 
 val STAFF_MEMBERS = emptyList<StaffMember>()

@@ -4,16 +4,38 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
     jvmToolchain(21)
     androidTarget {
     }
-    jvm("desktop")
+    jvm()
+
+    wasmJs {
+        browser {
+            commonWebpackConfig {
+                outputFileName = "shared.js"
+            }
+        }
+        binaries.executable()
+    }
+
+    listOf(
+        iosX64(),
+        iosArm64(),
+        iosSimulatorArm64()
+    ).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "shared"
+            isStatic = true
+        }
+    }
 
     sourceSets {
         commonMain.dependencies {
+            implementation(libs.sqldelight.runtime)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.coroutines.core)
@@ -25,14 +47,38 @@ kotlin {
             @Suppress("DEPRECATION") implementation(compose.material3)
             implementation(compose.ui)
         }
-        val desktopMain by getting {
+        val jvmMain by getting {
             dependencies {
                 implementation(libs.ktor.client.java)
+                implementation(libs.sqldelight.sqlite.driver)
             }
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.kotlinx.coroutines.android)
+            implementation(libs.sqldelight.android.driver)
+        }
+        val iosMain by creating {
+            dependencies {
+                implementation(libs.ktor.client.darwin)
+                implementation(libs.sqldelight.native.driver)
+            }
+        }
+        val wasmJsMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.js)
+                implementation(libs.ktor.client.content.negotiation)
+                implementation(libs.ktor.serialization.kotlinx.json)
+                implementation(libs.sqldelight.web.driver)
+            }
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("ClinicDatabase") {
+            packageName.set("com.egesa.clinic.shared.db")
         }
     }
 }

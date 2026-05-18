@@ -21,14 +21,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.UserRole
-import com.egesa.clinic.shared.data.FakeRepository
-import com.egesa.clinic.shared.data.StaffMember
+import com.egesa.clinic.shared.StaffMember
+import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.ui.components.RoleBadge
 import com.egesa.clinic.shared.ui.navigation.SessionState
 import com.egesa.clinic.shared.ui.theme.*
 
 @Composable
-fun LoginScreen(onLogin: (SessionState) -> Unit) {
+fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Unit) {
     var allStaff   by remember { mutableStateOf<List<StaffMember>>(emptyList()) }
     var picked     by remember { mutableStateOf<StaffMember?>(null) }
     var pin        by remember { mutableStateOf("") }
@@ -36,7 +36,7 @@ fun LoginScreen(onLogin: (SessionState) -> Unit) {
     var validating by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        allStaff = FakeRepository.getStaff()
+        allStaff = localRepository.getAllStaff()
     }
 
     Box(Modifier.fillMaxSize().background(Navy900)) {

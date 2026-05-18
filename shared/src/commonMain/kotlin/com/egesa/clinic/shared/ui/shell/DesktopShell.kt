@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.WorkflowArea
+import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.ui.components.Avatar
 import com.egesa.clinic.shared.ui.components.RoleBadge
 import com.egesa.clinic.shared.ui.navigation.ClinicNavItem
@@ -28,7 +29,7 @@ import com.egesa.clinic.shared.ui.screens.AreaScreen
 import com.egesa.clinic.shared.ui.theme.*
 
 @Composable
-fun DesktopShell(session: SessionState, onLogout: () -> Unit) {
+fun DesktopShell(session: SessionState, localRepository: LocalRepository, onLogout: () -> Unit) {
     val navItems = remember(session.role) { navItemsFor(session.role) }
     var activeArea    by remember { mutableStateOf(navItems.first().area) }
     var sidebarOpen   by remember { mutableStateOf(true) }
@@ -61,7 +62,7 @@ fun DesktopShell(session: SessionState, onLogout: () -> Unit) {
                 Modifier.weight(1f).fillMaxWidth().background(Slate50),
                 contentAlignment = Alignment.TopStart,
             ) {
-                AreaScreen(area = activeArea, session = session)
+                AreaScreen(area = activeArea, session = session, localRepository = localRepository)
             }
         }
     }

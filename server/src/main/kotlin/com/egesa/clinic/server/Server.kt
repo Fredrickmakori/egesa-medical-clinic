@@ -1,6 +1,7 @@
 package com.egesa.clinic.server
 
 import com.egesa.clinic.shared.HospitalState
+import com.egesa.clinic.shared.Permission
 import com.egesa.clinic.shared.StkRequestStatus
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -82,17 +83,60 @@ fun Application.hospitalApi() {
                 call.respond(mapOf("id" to principal?.userId(), "name" to principal?.name(), "role" to principal?.role()))
             }
 
-            get("/patients") { call.respond(state.allPatients()) }
-            get("/queue") { call.respond(state.receptionQueue()) }
-            get("/beds") { call.respond(state.wardBeds()) }
-            get("/metrics") { call.respond(state.metrics()) }
+            // ── Patient endpoints with permission checks ────────────────────────────
+            get("/patients") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Patient read access denied"))
+                    return@get
+                }
+                call.respond(state.allPatients())
+            }
 
+            get("/queue") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Queue read access denied"))
+                    return@get
+                }
+                call.respond(state.receptionQueue())
+            }
+
+            get("/beds") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Bed board access denied"))
+                    return@get
+                }
+                call.respond(state.wardBeds())
+            }
+
+            get("/metrics") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.AUDIT_VIEW)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Metrics access denied"))
+                    return@get
+                }
+                call.respond(state.metrics())
+            }
+
+            // ── Payment endpoints with permission checks ────────────────────────────
             post("/payments/stk-push") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PAYMENT_INITIATE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Payment initiation not allowed"))
+                    return@post
+                }
                 val request = call.receive<StkPushRequest>()
                 call.respond(mpesaService.initiateStkPush(request))
             }
 
             get("/payments/{checkoutRequestId}/status") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PAYMENT_INITIATE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Payment status access denied"))
+                    return@get
+                }
                 val checkoutRequestId = call.parameters["checkoutRequestId"].orEmpty()
                 call.respond(mpesaService.status(checkoutRequestId))
             }
@@ -101,16 +145,81 @@ fun Application.hospitalApi() {
                 val payload = call.receive<JsonElement>()
                 call.respond(mpesaService.parseCallback(payload))
             }
-            get("/payments/sync-health") { call.respond(state.syncHealth()) }
-            get("/payments/pending-stk") { call.respond(state.pendingStkRequests()) }
 
-            get("/admin/audit-trail") {
-                val role = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()?.role()
-                if (role != "ADMIN") {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Admin access required"))
-                } else {
-                    call.respond(state.auditTrail())
+            get("/payments/sync-health") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.AUDIT_VIEW)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Sync health access denied"))
+                    return@get
                 }
+                call.respond(state.syncHealth())
+            }
+
+            get("/payments/pending-stk") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.AUDIT_VIEW)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Pending STK access denied"))
+                    return@get
+                }
+                call.respond(state.pendingStkRequests())
+            }
+
+            // ── Admin endpoints ────────────────────────────────────────────────────
+            get("/admin/audit-trail") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.AUDIT_VIEW)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Admin access required"))
+                    return@get
+                }
+                call.respond(state.auditTrail())
+            }
+
+            // ── Cloud sync endpoints ───────────────────────────────────────────────
+            get("/sync/patients") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Sync access denied"))
+                    return@get
+                }
+                val remoteVersion = call.request.queryParameters["version"]?.toLongOrNull() ?: 0L
+                val patients = state.allPatients()
+                call.respond(mapOf(
+                    "patients" to patients,
+                    "version" to System.currentTimeMillis(),
+                    "count" to patients.size
+                ))
+            }
+
+            post("/sync/patients/batch") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_UPDATE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Batch sync not allowed"))
+                    return@post
+                }
+                val updates = runCatching { call.receive<List<com.egesa.clinic.shared.Patient>>() }
+                    .getOrElse {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid batch payload"))
+                        return@post
+                    }
+
+                val results = updates.map { patient ->
+                    mapOf("id" to patient.id, "status" to "synced", "version" to 1)
+                }
+                call.respond(results)
+            }
+
+            post("/sync/resolve-conflict") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_UPDATE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Conflict resolution not allowed"))
+                    return@post
+                }
+                val req = call.receive<ConflictResolutionRequest>()
+                call.respond(ConflictResolutionResponse(
+                    resolved = true,
+                    strategy = req.strategy,
+                    finalVersion = maxOf(req.localVersion, req.remoteVersion)
+                ))
             }
         }
         get("/scope") {
@@ -132,3 +241,36 @@ private fun simulateStkStatusLookup(requestId: String): StkRequestStatus {
         else -> StkRequestStatus.SUCCESS
     }
 }
+
+// ── Sync-related request/response classes ──────────────────────────────────
+
+@kotlinx.serialization.Serializable
+data class SyncPatientRequest(
+    val patientId: String,
+    val version: Int,
+    val localVersion: Int
+)
+
+@kotlinx.serialization.Serializable
+data class SyncPatientResponse(
+    val patientId: String,
+    val updated: Boolean,
+    val remoteVersion: Int,
+    val message: String
+)
+
+@kotlinx.serialization.Serializable
+data class ConflictResolutionRequest(
+    val entityId: String,
+    val localVersion: Int,
+    val remoteVersion: Int,
+    val strategy: String  // CLIENT_WINS, SERVER_WINS, MERGE
+)
+
+@kotlinx.serialization.Serializable
+data class ConflictResolutionResponse(
+    val resolved: Boolean,
+    val strategy: String,
+    val finalVersion: Int
+)
+

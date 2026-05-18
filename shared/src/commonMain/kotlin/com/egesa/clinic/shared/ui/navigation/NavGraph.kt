@@ -1,7 +1,10 @@
 package com.egesa.clinic.shared.ui.navigation
 
+import com.egesa.clinic.shared.Permission
+import com.egesa.clinic.shared.RolePermissionMap
 import com.egesa.clinic.shared.UserRole
 import com.egesa.clinic.shared.WorkflowArea
+import com.egesa.clinic.shared.sync.SyncStatus
 
 data class ClinicNavItem(
     val area: WorkflowArea,
@@ -35,7 +38,22 @@ data class SessionState(
     val fullName: String,
     val role: UserRole,
     val shiftLabel: String = "Day shift",
-)
+    val permissions: Set<Permission> = RolePermissionMap.permissionsFor(role),
+    val token: String? = null,
+    val syncStatus: SyncStatus = SyncStatus.IDLE,
+    val lastSyncTime: Long? = null
+) {
+    val initials: String
+        get() = fullName.split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString("").uppercase()
+    
+    fun hasPermission(permission: Permission): Boolean = permission in permissions
+    
+    fun hasAllPermissions(vararg permissions: Permission): Boolean = 
+        permissions.all { it in this.permissions }
+    
+    fun hasAnyPermission(vararg permissions: Permission): Boolean = 
+        permissions.any { it in this.permissions }
+}
 
 val SessionState.initials: String
     get() = fullName.split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString("").uppercase()

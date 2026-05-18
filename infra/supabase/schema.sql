@@ -10,6 +10,8 @@ create table if not exists public.patients (
   triage_level integer not null default 3,
   clinician text,
   diagnosis text,
+  version integer not null default 1,
+  synced_at timestamptz,
   updated_at timestamptz not null default now()
 );
 
@@ -47,3 +49,32 @@ for insert to authenticated with check (true);
 
 create policy "Allow authenticated payment update" on public.payment_records
 for update to authenticated using (true) with check (true);
+
+-- ── Sync metadata for cloud synchronization ─────────────────────────────��──
+
+create table if not exists public.sync_metadata (
+  entity_id text primary key,
+  entity_type text not null,
+  local_version integer not null default 1,
+  remote_version integer not null default 0,
+  last_synced_at timestamptz,
+  sync_state text not null default 'PENDING',
+  created_by text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index idx_sync_metadata_entity_type on public.sync_metadata(entity_type);
+create index idx_sync_metadata_sync_state on public.sync_metadata(sync_state);
+
+alter table public.sync_metadata enable row level security;
+
+create policy "Allow authenticated read sync metadata" on public.sync_metadata
+for select to authenticated using (true);
+
+create policy "Allow authenticated insert sync metadata" on public.sync_metadata
+for insert to authenticated with check (true);
+
+create policy "Allow authenticated update sync metadata" on public.sync_metadata
+for update to authenticated using (true) with check (true);
+

@@ -9,6 +9,8 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.egesa.clinic.shared.ui.ClinicApp
 import com.egesa.clinic.shared.ui.ClientPlatform
+import com.egesa.clinic.shared.db.DatabaseDriverFactory
+import androidx.compose.runtime.remember
 
 fun main() = application {
     val windowState = rememberWindowState(size = DpSize(1280.dp, 800.dp))
@@ -17,6 +19,7 @@ fun main() = application {
         title          = "Egesa Medical Clinic",
         state          = windowState,
     ) {
-        ClinicApp(ClientPlatform.Desktop)
+        val driverFactory = remember { DatabaseDriverFactory() }
+        ClinicApp(ClientPlatform.Desktop, driverFactory)
     }
 }

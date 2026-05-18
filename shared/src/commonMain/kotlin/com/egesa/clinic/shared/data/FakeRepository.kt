@@ -2,6 +2,7 @@ package com.egesa.clinic.shared.data
 
 import com.egesa.clinic.shared.*
 import kotlinx.coroutines.delay
+import kotlinx.datetime.Clock
 
 /**
  * Simulates async API calls. Each function adds a short delay to mimic network latency.
@@ -103,31 +104,90 @@ object FakeRepository {
         // TODO: GET /wards/handoff?shift={shift}
         return db.shiftHandoffSummary(shift)
     }
+
+    // ── Cloud Synchronization ──────────────────────────────────────────────────
+
+    /**
+     * Fetch patients from server with delta sync support
+     * Returns: patients data and current remote version
+     */
+    suspend fun syncPatientData(remoteVersion: Long = 0): Result<SyncPatientDataResponse> {
+        return try {
+            delay(500) // Simulate network latency
+            // TODO: GET /sync/patients?version={remoteVersion}
+            val patients = db.allPatients()
+            Result.success(SyncPatientDataResponse(
+                patients = patients,
+                remoteVersion = Clock.System.now().toEpochMilliseconds(),
+                count = patients.size
+            ))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Upload batch of patient changes to server
+     * Used for syncing local modifications back to cloud
+     */
+    suspend fun uploadPatientChanges(changes: List<Patient>): Result<List<SyncResultItem>> {
+        return try {
+            delay(400) // Simulate network latency
+            // TODO: POST /sync/patients/batch
+            val results = changes.map { patient ->
+                SyncResultItem(
+                    id = patient.id,
+                    status = "synced",
+                    version = 1
+                )
+            }
+            Result.success(results)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Resolve a conflict between local and remote versions
+     * Supported strategies: CLIENT_WINS, SERVER_WINS, MERGE
+     */
+    suspend fun resolveConflict(
+        entityId: String,
+        localVersion: Int,
+        remoteVersion: Int,
+        strategy: String = "SERVER_WINS"
+    ): Result<ConflictResolutionResult> {
+        return try {
+            delay(200) // Simulate network latency
+            // TODO: POST /sync/resolve-conflict
+            Result.success(ConflictResolutionResult(
+                resolved = true,
+                strategy = strategy,
+                finalVersion = maxOf(localVersion, remoteVersion)
+            ))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get sync health status from server
+     */
+    suspend fun getSyncHealth(): Result<Map<String, String>> {
+        return try {
+            delay(200)
+            // TODO: GET /payments/sync-health
+            Result.success(mapOf(
+                "status" to "healthy",
+                "pendingReconciliation" to "0",
+                "lastSync" to Clock.System.now().toEpochMilliseconds().toString()
+            ))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
 
 // ── Staff data ─────────────────────────────────────────────────────────────────
 
-data class StaffMember(
-    val id: String,
-    val fullName: String,
-    val role: UserRole,
-    val department: String,
-)
-
-val STAFF_MEMBERS = listOf(
-    StaffMember("DR-001", "Dr. James Kamau",          UserRole.DOCTOR,       "Outpatient"),
-    StaffMember("DR-002", "Dr. Sarah Ochieng",        UserRole.DOCTOR,       "Emergency"),
-    StaffMember("DR-003", "Dr. Michael Mwangi",       UserRole.DOCTOR,       "Surgery"),
-    StaffMember("DR-004", "Dr. Amina Yusuf",          UserRole.DOCTOR,       "Pediatrics"),
-    StaffMember("DR-005", "Dr. Samuel Njoroge",       UserRole.DOCTOR,       "Internal Medicine"),
-    StaffMember("NR-001", "Nurse Faith Wanjiku",      UserRole.NURSE,        "Medical Ward"),
-    StaffMember("NR-002", "Nurse Peter Otieno",       UserRole.NURSE,        "Surgical Ward"),
-    StaffMember("NR-003", "Nurse Grace Mwangi",       UserRole.NURSE,        "Pediatrics"),
-    StaffMember("NR-004", "Nurse Daniel Kibet",       UserRole.NURSE,        "ICU"),
-    StaffMember("NR-005", "Nurse Naomi Atieno",       UserRole.NURSE,        "Emergency"),
-    StaffMember("RC-001", "Mary Otieno",              UserRole.RECEPTIONIST, "Front Desk"),
-    StaffMember("RC-002", "John Ouma",                UserRole.RECEPTIONIST, "Front Desk"),
-    StaffMember("RC-003", "Esther Wekesa",            UserRole.RECEPTIONIST, "Outpatient"),
-    StaffMember("AD-001", "Admin User",               UserRole.ADMIN,        "Administration"),
-    StaffMember("AD-002", "Jane Njeri",               UserRole.ADMIN,        "Administration"),
-)
+val STAFF_MEMBERS = emptyList<StaffMember>()

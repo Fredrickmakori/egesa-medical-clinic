@@ -257,3 +257,35 @@ fun LabeledDivider(label: String, modifier: Modifier = Modifier) {
         HorizontalDivider(Modifier.weight(1f), color = Slate200)
     }
 }
+
+// ── Sync status indicator ───────────────────────────────────────────────────
+
+@Composable
+fun SyncStatusIndicator(
+    syncStatus: com.egesa.clinic.shared.sync.SyncStatus,
+    modifier: Modifier = Modifier,
+    showLabel: Boolean = true,
+) {
+    Row(
+        modifier = modifier.padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val (color, label) = when (syncStatus) {
+            com.egesa.clinic.shared.sync.SyncStatus.SYNCING ->
+                Pair(Color(0xFFFCD34D), "Syncing…")
+            com.egesa.clinic.shared.sync.SyncStatus.SUCCESS ->
+                Pair(StatusStable, "Synced")
+            com.egesa.clinic.shared.sync.SyncStatus.ERROR ->
+                Pair(StatusCritical, "Sync Error")
+            com.egesa.clinic.shared.sync.SyncStatus.OFFLINE ->
+                Pair(Slate500, "Offline")
+            com.egesa.clinic.shared.sync.SyncStatus.IDLE ->
+                Pair(Navy200, "Ready")
+        }
+        StatusDot(color, size = 8)
+        if (showLabel) {
+            Text(label, fontSize = 10.sp, color = color, fontWeight = FontWeight.Medium)
+        }
+    }
+}

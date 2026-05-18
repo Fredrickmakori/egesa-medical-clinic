@@ -2,6 +2,8 @@ package com.egesa.clinic.server
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.egesa.clinic.shared.Permission
+import com.egesa.clinic.shared.RolePermissionMap
 import com.egesa.clinic.shared.UserRole
 import io.ktor.server.auth.jwt.JWTPrincipal
 import kotlinx.datetime.Clock
@@ -70,3 +72,28 @@ fun JWTPrincipal.userId(): String? = payload.subject
 fun JWTPrincipal.name(): String? = payload.getClaim("name")?.asString()
 
 fun Instant.toEpochSeconds(): Long = epochSeconds
+
+// ── Permission checking helpers ────────────────────────────────────────────
+
+fun requirePermission(principal: JWTPrincipal?, permission: Permission): Boolean {
+    val roleStr = principal?.role() ?: return false
+    val userRole = try {
+        UserRole.valueOf(roleStr)
+    } catch (e: Exception) {
+        return false
+    }
+    return RolePermissionMap.hasPermission(userRole, permission)
+}
+
+fun requireRole(principal: JWTPrincipal?, requiredRole: UserRole): Boolean {
+    val roleStr = principal?.role() ?: return false
+    return roleStr == requiredRole.name
+}
+
+fun hasAllPermissions(principal: JWTPrincipal?, vararg permissions: Permission): Boolean {
+    return permissions.all { requirePermission(principal, it) }
+}
+
+fun hasAnyPermission(principal: JWTPrincipal?, vararg permissions: Permission): Boolean {
+    return permissions.any { requirePermission(principal, it) }
+}

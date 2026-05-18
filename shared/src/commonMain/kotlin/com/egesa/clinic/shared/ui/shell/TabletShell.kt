@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.WorkflowArea
+import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.ui.components.Avatar
 import com.egesa.clinic.shared.ui.components.RoleBadge
 import com.egesa.clinic.shared.ui.navigation.ClinicNavItem
@@ -27,7 +28,7 @@ private const val BOTTOM_NAV_LIMIT = 4
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TabletShell(session: SessionState, onLogout: () -> Unit) {
+fun TabletShell(session: SessionState, localRepository: LocalRepository, onLogout: () -> Unit) {
     val navItems     = remember(session.role) { navItemsFor(session.role) }
     val primaryItems = navItems.take(BOTTOM_NAV_LIMIT)
     var activeArea   by remember { mutableStateOf(navItems.first().area) }
@@ -54,7 +55,7 @@ fun TabletShell(session: SessionState, onLogout: () -> Unit) {
         containerColor = Slate50,
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            AreaScreen(area = activeArea, session = session)
+            AreaScreen(area = activeArea, session = session, localRepository = localRepository)
         }
     }
 

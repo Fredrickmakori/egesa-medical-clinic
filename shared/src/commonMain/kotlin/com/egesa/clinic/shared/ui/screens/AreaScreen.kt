@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.*
 import com.egesa.clinic.shared.data.FakeRepository
+import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.ui.components.*
 import com.egesa.clinic.shared.ui.navigation.SessionState
 import com.egesa.clinic.shared.ui.theme.*
@@ -23,9 +24,9 @@ import com.egesa.clinic.shared.ui.theme.*
 // ── Router ─────────────────────────────────────────────────────────────────────
 
 @Composable
-fun AreaScreen(area: WorkflowArea, session: SessionState) {
+fun AreaScreen(area: WorkflowArea, session: SessionState, localRepository: LocalRepository) {
     when (area) {
-        WorkflowArea.ADMIN        -> DashboardScreen(session)
+        WorkflowArea.ADMIN        -> AdminScreen(localRepository)
         WorkflowArea.RECEPTION    -> ReceptionScreen()
         WorkflowArea.WARDS        -> WardsScreen()
         WorkflowArea.CONSULTATION -> ConsultationScreen()

@@ -17,7 +17,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val driverFactory = remember { DatabaseDriverFactory(this) }
-            ClinicApp(ClientPlatform.Tablet, driverFactory)
+            ClinicApp(
+                platform = ClientPlatform.Tablet,
+                databaseDriverFactory = driverFactory,
+                apiBaseUrl = BuildConfig.API_BASE_URL,
+                allowMockFallback = BuildConfig.ALLOW_MOCK_FALLBACK,
+            )
         }
     }
 }

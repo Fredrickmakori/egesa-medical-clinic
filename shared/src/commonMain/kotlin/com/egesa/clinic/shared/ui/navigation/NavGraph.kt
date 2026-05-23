@@ -26,6 +26,8 @@ val ALL_NAV_ITEMS = listOf(
         setOf(UserRole.ADMIN)),
     ClinicNavItem(WorkflowArea.REPORTS,      "Reports",      "Rep",
         setOf(UserRole.ADMIN)),
+    ClinicNavItem(WorkflowArea.MOH_REPORTS,  "MOH Reports",  "MOH",
+        setOf(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)),
     ClinicNavItem(WorkflowArea.SETTINGS,     "Settings",     "Set",
         setOf(UserRole.ADMIN)),
 )

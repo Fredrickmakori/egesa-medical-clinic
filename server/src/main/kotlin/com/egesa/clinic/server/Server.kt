@@ -3,6 +3,23 @@ package com.egesa.clinic.server
 import com.egesa.clinic.shared.HospitalState
 import com.egesa.clinic.shared.Permission
 import com.egesa.clinic.shared.StkRequestStatus
+import com.egesa.clinic.shared.Shift
+import com.egesa.clinic.shared.data.AdmissionTransferDischargeStateDto
+import com.egesa.clinic.shared.data.BedCardDto
+import com.egesa.clinic.shared.data.BottleneckCellDto
+import com.egesa.clinic.shared.data.ChecklistItemDto
+import com.egesa.clinic.shared.data.ConflictResolutionRequestDto
+import com.egesa.clinic.shared.data.ConflictResolutionResultDto
+import com.egesa.clinic.shared.data.DashboardMetricDto
+import com.egesa.clinic.shared.data.NursingTaskDto
+import com.egesa.clinic.shared.data.PatientDto
+import com.egesa.clinic.shared.data.QueueItemDto
+import com.egesa.clinic.shared.data.SyncPatientDataDto
+import com.egesa.clinic.shared.data.SyncResultItemDto
+import com.egesa.clinic.shared.data.TrendPointDto
+import com.egesa.clinic.shared.data.WardCensusRowDto
+import com.egesa.clinic.shared.data.WardOverviewDto
+import com.egesa.clinic.shared.data.toDto
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -90,7 +107,7 @@ fun Application.hospitalApi() {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Patient read access denied"))
                     return@get
                 }
-                call.respond(state.allPatients())
+                call.respond(state.allPatients().map { it.toDto() })
             }
 
             get("/queue") {
@@ -99,7 +116,7 @@ fun Application.hospitalApi() {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Queue read access denied"))
                     return@get
                 }
-                call.respond(state.receptionQueue())
+                call.respond(state.receptionQueue().map { QueueItemDto(it.patientId, it.name, it.triageLevel, it.waitMinutes) })
             }
 
             get("/beds") {
@@ -117,7 +134,96 @@ fun Application.hospitalApi() {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Metrics access denied"))
                     return@get
                 }
-                call.respond(state.metrics())
+                call.respond(state.metrics().map { DashboardMetricDto(it.title, it.value, it.subtitle) })
+            }
+
+            // --- Client API routes (mirrors shared/data/ClinicApi.kt) ---
+            get("/dashboard/kpis") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.AUDIT_VIEW)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "KPI access denied"))
+                    return@get
+                }
+                call.respond(state.adminKpis().map { DashboardMetricDto(it.title, it.value, it.subtitle) })
+            }
+
+            get("/dashboard/bottlenecks") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.AUDIT_VIEW)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Bottleneck access denied"))
+                    return@get
+                }
+                call.respond(state.bottleneckHeatmap().map { BottleneckCellDto(it.workflowStage, it.severity, it.pendingCount) })
+            }
+
+            get("/dashboard/trend") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.AUDIT_VIEW)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Trend access denied"))
+                    return@get
+                }
+                call.respond(state.registrationTrend().map { TrendPointDto(it.label, it.value) })
+            }
+
+            get("/wards/overview") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Ward overview access denied"))
+                    return@get
+                }
+                val o = state.wardOverview()
+                call.respond(WardOverviewDto(o.occupancyPercent, o.bedsAvailable, o.nurseWorkload, o.alerts))
+            }
+
+            get("/wards/beds") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Bed board access denied"))
+                    return@get
+                }
+                call.respond(state.bedBoard().map {
+                    BedCardDto(it.ward, it.roomBed, it.patientName, it.status, it.acuity, it.isolation)
+                })
+            }
+
+            get("/wards/tasks") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Tasks access denied"))
+                    return@get
+                }
+                call.respond(state.nursingTasks().map { NursingTaskDto(it.type, it.detail, it.due, it.priority) })
+            }
+
+            get("/wards/census") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Census access denied"))
+                    return@get
+                }
+                call.respond(state.wardCensus().map { WardCensusRowDto(it.ward, it.occupiedBeds, it.totalBeds, it.highAcuityCount, it.isolationCount) })
+            }
+
+            get("/wards/atd") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_UPDATE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "ATD access denied"))
+                    return@get
+                }
+                val s = state.atdState()
+                val checklist = s.dischargeChecklist.map { (label, complete) -> ChecklistItemDto(label, complete) }
+                call.respond(AdmissionTransferDischargeStateDto(s.selectedPatientId, s.selectedBed, s.transferWard, checklist))
+            }
+
+            get("/wards/handoff") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Handoff access denied"))
+                    return@get
+                }
+                val shiftName = call.request.queryParameters["shift"] ?: Shift.DAY.name
+                val shift = runCatching { Shift.valueOf(shiftName) }.getOrDefault(Shift.DAY)
+                call.respond(state.shiftHandoffSummary(shift))
             }
 
             // ── Payment endpoints with permission checks ────────────────────────────
@@ -194,11 +300,13 @@ fun Application.hospitalApi() {
                 }
                 val remoteVersion = call.request.queryParameters["version"]?.toLongOrNull() ?: 0L
                 val patients = state.allPatients()
-                call.respond(mapOf(
-                    "patients" to patients,
-                    "version" to System.currentTimeMillis(),
-                    "count" to patients.size
-                ))
+                call.respond(
+                    SyncPatientDataDto(
+                        patients = patients.map { it.toDto() },
+                        remoteVersion = System.currentTimeMillis(),
+                        count = patients.size
+                    )
+                )
             }
 
             post("/sync/patients/batch") {
@@ -207,14 +315,14 @@ fun Application.hospitalApi() {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Batch sync not allowed"))
                     return@post
                 }
-                val updates = runCatching { call.receive<List<com.egesa.clinic.shared.Patient>>() }
+                val updates = runCatching { call.receive<List<PatientDto>>() }
                     .getOrElse {
                         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid batch payload"))
                         return@post
                     }
 
                 val results = updates.map { patient ->
-                    mapOf("id" to patient.id, "status" to "synced", "version" to 1)
+                    SyncResultItemDto(id = patient.id, status = "synced", version = 1)
                 }
                 call.respond(results)
             }
@@ -225,12 +333,14 @@ fun Application.hospitalApi() {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Conflict resolution not allowed"))
                     return@post
                 }
-                val req = call.receive<ConflictResolutionRequest>()
-                call.respond(ConflictResolutionResponse(
-                    resolved = true,
-                    strategy = req.strategy,
-                    finalVersion = maxOf(req.localVersion, req.remoteVersion)
-                ))
+                val req = call.receive<ConflictResolutionRequestDto>()
+                call.respond(
+                    ConflictResolutionResultDto(
+                        resolved = true,
+                        strategy = req.strategy,
+                        finalVersion = maxOf(req.localVersion, req.remoteVersion)
+                    )
+                )
             }
         }
         get("/scope") {

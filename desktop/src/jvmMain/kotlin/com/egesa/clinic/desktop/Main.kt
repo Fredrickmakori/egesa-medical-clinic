@@ -20,6 +20,13 @@ fun main() = application {
         state          = windowState,
     ) {
         val driverFactory = remember { DatabaseDriverFactory() }
-        ClinicApp(ClientPlatform.Desktop, driverFactory)
+        val apiBaseUrl = System.getenv("EGESA_API_BASE_URL")
+        val allowMock = (System.getenv("EGESA_ALLOW_MOCK_FALLBACK") ?: "true").equals("true", ignoreCase = true)
+        ClinicApp(
+            platform = ClientPlatform.Desktop,
+            databaseDriverFactory = driverFactory,
+            apiBaseUrl = apiBaseUrl,
+            allowMockFallback = allowMock,
+        )
     }
 }

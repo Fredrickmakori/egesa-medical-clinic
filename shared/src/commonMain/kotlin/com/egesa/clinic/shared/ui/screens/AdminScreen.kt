@@ -8,19 +8,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.egesa.clinic.shared.StaffMember
-import com.egesa.clinic.shared.UserRole
+import com.egesa.clinic.shared.*
 import com.egesa.clinic.shared.data.LocalRepository
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 @Composable
 fun AdminScreen(localRepository: LocalRepository) {
     var staffList by remember { mutableStateOf(emptyList<StaffMember>()) }
+    var auditTrail by remember { mutableStateOf(emptyList<AuditEvent>()) }
     var showAddDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         staffList = localRepository.getAllStaff()
+        // In a real app, this would come from the repository
+        // For now, we'll use a local state or fetch from a mock
     }
 
     var reportType by remember { mutableStateOf("moh204_monthly_opd") }
@@ -82,7 +85,31 @@ fun AdminScreen(localRepository: LocalRepository) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn {
+        Text("Audit Trail", style = MaterialTheme.typography.titleMedium)
+        Card(modifier = Modifier.fillMaxWidth().height(200.dp)) {
+            if (auditTrail.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No audit events recorded", style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                LazyColumn(Modifier.padding(8.dp)) {
+                    items(auditTrail) { event ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text("${event.action}: ${event.module}", style = MaterialTheme.typography.labelMedium)
+                                Text(event.timestamp, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(event.user, style = MaterialTheme.typography.labelSmall)
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn(Modifier.weight(1f)) {
             items(staffList) { staff ->
                 Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     ListItem(
@@ -102,6 +129,18 @@ fun AdminScreen(localRepository: LocalRepository) {
                 scope.launch {
                     localRepository.insertStaff(newStaff, pin)
                     staffList = localRepository.getAllStaff()
+                    
+                    // Add audit event
+                    val event = AuditEvent(
+                        user = "Admin", // Should be current user
+                        action = "CREATE_STAFF",
+                        module = "STAFF_MANAGEMENT",
+                        timestamp = Clock.System.now().toString(),
+                        contextReference = newStaff.id,
+                        permission = Permission.STAFF_MANAGE
+                    )
+                    auditTrail = listOf(event) + auditTrail
+
                     showAddDialog = false
                 }
             }

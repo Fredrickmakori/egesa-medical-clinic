@@ -9,11 +9,10 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 interface ClinicApi {
-    suspend fun validatePin(staffId: String, pin: String): LoginResponseDto
+    suspend fun login(staffId: String, pin: String): LoginResponseDto
     suspend fun getPatients(): List<PatientDto>
     suspend fun getPatient(id: String): PatientDto?
     suspend fun getQueue(): List<QueueItemDto>
@@ -29,11 +28,10 @@ interface ClinicApi {
     suspend fun syncPatientData(remoteVersion: Long): SyncPatientDataDto
     suspend fun uploadPatientChanges(changes: List<PatientDto>): List<SyncResultItemDto>
     suspend fun resolveConflict(request: ConflictResolutionRequestDto): ConflictResolutionResultDto
-    suspend fun getSyncHealth(): Map<String, String>
 }
 
 class KtorClinicApi(private val client: HttpClient, private val baseUrl: String) : ClinicApi {
-    override suspend fun validatePin(staffId: String, pin: String): LoginResponseDto =
+    override suspend fun login(staffId: String, pin: String): LoginResponseDto =
         client.post("$baseUrl/auth/login") { contentType(ContentType.Application.Json); setBody(LoginRequestDto(staffId, pin)) }.body()
 
     override suspend fun getPatients(): List<PatientDto> = client.get("$baseUrl/patients").body()
@@ -54,12 +52,16 @@ class KtorClinicApi(private val client: HttpClient, private val baseUrl: String)
 
     override suspend fun resolveConflict(request: ConflictResolutionRequestDto): ConflictResolutionResultDto =
         client.post("$baseUrl/sync/resolve-conflict") { contentType(ContentType.Application.Json); setBody(request) }.body()
-
-    override suspend fun getSyncHealth(): Map<String, String> = client.get("$baseUrl/sync/health").body()
 }
 
-@Serializable data class LoginRequestDto(@SerialName("staff_id") val staffId: String, val pin: String)
-@Serializable data class LoginResponseDto(val authenticated: Boolean)
+@Serializable data class LoginRequestDto(val staffId: String, val pin: String)
+@Serializable
+data class LoginResponseDto(
+    val accessToken: String,
+    val expiresAtEpochSeconds: Long,
+    val role: String,
+    val staffName: String
+)
 @Serializable data class PatientDto(
     val id: String, val fullName: String, val age: Int, val sex: Sex, val status: String,
     val assignedWard: String? = null, val roomBed: String? = null, val acuity: String = "Moderate",
@@ -81,17 +83,17 @@ class KtorClinicApi(private val client: HttpClient, private val baseUrl: String)
 @Serializable data class ConflictResolutionRequestDto(val entityId: String, val localVersion: Int, val remoteVersion: Int, val strategy: String)
 @Serializable data class ConflictResolutionResultDto(val resolved: Boolean, val strategy: String, val finalVersion: Int)
 
-internal fun PatientDto.toDomain() = Patient(id, fullName, age, sex, status, assignedWard, roomBed, acuity, isolation, visits, activeDiagnosis, currentMedications, timeline)
-internal fun Patient.toDto() = PatientDto(id, fullName, age, sex, status, assignedWard, roomBed, acuity, isolation, visits, activeDiagnosis, currentMedications, timeline)
-internal fun QueueItemDto.toDomain() = QueueItem(patientId, name, triageLevel, waitMinutes)
-internal fun DashboardMetricDto.toDomain() = DashboardMetric(title, value, subtitle)
-internal fun BottleneckCellDto.toDomain() = BottleneckCell(workflowStage, severity, pendingCount)
-internal fun TrendPointDto.toDomain() = TrendPoint(label, value)
-internal fun WardOverviewDto.toDomain() = WardOverview(occupancyPercent, bedsAvailable, nurseWorkload, alerts)
-internal fun BedCardDto.toDomain() = BedCard(ward, roomBed, patientName, status, acuity, isolation)
-internal fun NursingTaskDto.toDomain() = NursingTask(type, detail, due, priority)
-internal fun WardCensusRowDto.toDomain() = WardCensusRow(ward, occupiedBeds, totalBeds, highAcuityCount, isolationCount)
-internal fun AdmissionTransferDischargeStateDto.toDomain() = AdmissionTransferDischargeState(selectedPatientId, selectedBed, transferWard, dischargeChecklist.map { it.label to it.complete })
-internal fun SyncPatientDataDto.toDomain() = SyncPatientDataResponse(patients.map { it.toDomain() }, remoteVersion, count)
-internal fun SyncResultItemDto.toDomain() = SyncResultItem(id, status, version)
-internal fun ConflictResolutionResultDto.toDomain() = ConflictResolutionResult(resolved, strategy, finalVersion)
+fun PatientDto.toDomain() = Patient(id, fullName, age, sex, status, assignedWard, roomBed, acuity, isolation, visits, activeDiagnosis, currentMedications, timeline)
+fun Patient.toDto() = PatientDto(id, fullName, age, sex, status, assignedWard, roomBed, acuity, isolation, visits, activeDiagnosis, currentMedications, timeline)
+fun QueueItemDto.toDomain() = QueueItem(patientId, name, triageLevel, waitMinutes)
+fun DashboardMetricDto.toDomain() = DashboardMetric(title, value, subtitle)
+fun BottleneckCellDto.toDomain() = BottleneckCell(workflowStage, severity, pendingCount)
+fun TrendPointDto.toDomain() = TrendPoint(label, value)
+fun WardOverviewDto.toDomain() = WardOverview(occupancyPercent, bedsAvailable, nurseWorkload, alerts)
+fun BedCardDto.toDomain() = BedCard(ward, roomBed, patientName, status, acuity, isolation)
+fun NursingTaskDto.toDomain() = NursingTask(type, detail, due, priority)
+fun WardCensusRowDto.toDomain() = WardCensusRow(ward, occupiedBeds, totalBeds, highAcuityCount, isolationCount)
+fun AdmissionTransferDischargeStateDto.toDomain() = AdmissionTransferDischargeState(selectedPatientId, selectedBed, transferWard, dischargeChecklist.map { it.label to it.complete })
+fun SyncPatientDataDto.toDomain() = SyncPatientDataResponse(patients.map { it.toDomain() }, remoteVersion, count)
+fun SyncResultItemDto.toDomain() = SyncResultItem(id, status, version)
+fun ConflictResolutionResultDto.toDomain() = ConflictResolutionResult(resolved, strategy, finalVersion)

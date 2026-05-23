@@ -155,6 +155,23 @@ CREATE TABLE NcdFollowupEntity (
   complications TEXT
 );
 
+CREATE TABLE HtsRegisterEntity (
+  hts_id TEXT PRIMARY KEY NOT NULL,
+  encounter_id TEXT NOT NULL UNIQUE,
+  serial_number TEXT,
+  hts_number TEXT,
+  population_type TEXT NOT NULL, -- General Pop, Key Pop, etc.
+  testing_point TEXT NOT NULL, -- OPD, IPD, VCT, etc.
+  test_1_result TEXT, -- Positive, Negative, Inconclusive
+  test_2_result TEXT,
+  final_result TEXT NOT NULL,
+  couple_testing TEXT,
+  recency_test_result TEXT,
+  referred_to TEXT,
+  linked_to_care INTEGER NOT NULL DEFAULT 0,
+  remarks TEXT
+);
+
 -- Sync queue
 CREATE TABLE SyncQueueEntity (
   id TEXT PRIMARY KEY NOT NULL,
@@ -219,3 +236,25 @@ VALUES (?, ?, ?, ?, ?, ?);
 
 deleteSyncItem:
 DELETE FROM SyncQueueEntity WHERE id = ?;
+
+-- HTS Register Queries
+insertHtsEntry:
+INSERT OR REPLACE INTO HtsRegisterEntity(
+  hts_id, encounter_id, serial_number, hts_number, population_type,
+  testing_point, test_1_result, test_2_result, final_result,
+  couple_testing, recency_test_result, referred_to, linked_to_care, remarks
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectHtsByEncounter:
+SELECT * FROM HtsRegisterEntity WHERE encounter_id = ?;
+
+-- MOH Report Aggregations (Example for HTS Lab)
+getHtsSummary:
+SELECT
+    p.sex,
+    p.age,
+    h.final_result
+FROM HtsRegisterEntity h
+JOIN EncounterEntity e ON h.encounter_id = e.encounter_id
+JOIN PatientEntity p ON e.patient_id = p.id
+WHERE e.encounter_datetime BETWEEN ? AND ?;

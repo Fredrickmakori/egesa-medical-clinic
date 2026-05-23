@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Hospital/PHI apps should not allow cleartext traffic. -->
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
+

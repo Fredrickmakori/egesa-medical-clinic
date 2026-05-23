@@ -25,12 +25,39 @@ import com.egesa.clinic.shared.ui.theme.*
 
 @Composable
 fun AreaScreen(area: WorkflowArea, session: SessionState, localRepository: LocalRepository) {
+    if (!RolePermissionMap.hasPermission(session.role, permissionForArea(area))) {
+        AccessDeniedScreen(area)
+        return
+    }
+
     when (area) {
         WorkflowArea.ADMIN        -> AdminScreen(localRepository)
         WorkflowArea.RECEPTION    -> ReceptionScreen()
         WorkflowArea.WARDS        -> WardsScreen()
-        WorkflowArea.CONSULTATION -> ClinicalProgramsScreen()
+        WorkflowArea.CONSULTATION -> ClinicalProgramsScreen(localRepository)
+        WorkflowArea.MOH_REPORTS  -> MohReportScreen(localRepository)
+        WorkflowArea.DASHBOARD     -> DashboardScreen(session)
         else                      -> PlaceholderScreen(area)
+    }
+}
+
+private fun permissionForArea(area: WorkflowArea): Permission = when (area) {
+    WorkflowArea.ADMIN -> Permission.SYSTEM_CONFIG
+    WorkflowArea.RECEPTION -> Permission.PATIENT_CREATE
+    WorkflowArea.WARDS -> Permission.WARD_ADMISSION
+    WorkflowArea.CONSULTATION -> Permission.CONSULTATION_WRITE
+    WorkflowArea.DIAGNOSIS -> Permission.DIAGNOSIS_WRITE
+    WorkflowArea.MOH_REPORTS -> Permission.AUDIT_VIEW
+    else -> Permission.PATIENT_READ // Default safe permission
+}
+
+@Composable
+private fun AccessDeniedScreen(area: WorkflowArea) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Access Denied", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.error)
+            Text("You do not have permission to access ${area.name}")
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 package com.egesa.clinic.shared
 
 import com.egesa.clinic.shared.sync.SyncHealthStatus
+import kotlinx.datetime.Clock
 
 import kotlin.jvm.JvmInline
 import kotlinx.serialization.Serializable
@@ -41,8 +42,16 @@ enum class MuacStatus(override val code: String) : CodeEnum { GREEN("green"), YE
 enum class Complication(override val code: String) : CodeEnum { NONE("none"), FEVER("fever"), HEMORRHAGE("hemorrhage"), SEPSIS("sepsis"), ECLAMPSIA("eclampsia"), OTHER("other") }
 
 object LegacyCodeMapper {
-    private fun <T : Enum<T>> codeSet(values: Array<T>): Set<String> where T : CodeEnum = values.map { it.code }.toSet()
-    fun sex(raw: String): Sex = Sex.entries.first { it.code == LegacyMappableCode.from("sex", raw, mapOf("m" to "male", "f" to "female"), codeSet(Sex.entries.toTypedArray())).value }
+    private fun <T> codeSet(values: Array<T>): Set<String> where T : Enum<T>, T : CodeEnum =
+        values.map { it.code }.toSet()
+
+    fun sex(raw: String): Sex = Sex.entries.find { it.code == raw.lowercase() } ?: Sex.UNKNOWN
+
+    fun visitType(raw: String): VisitType = VisitType.entries.find { it.code == raw.lowercase() } ?: VisitType.OUTPATIENT
+
+    fun disposition(raw: String): Disposition = Disposition.entries.find { it.code == raw.lowercase() } ?: Disposition.DISCHARGED
+
+    fun hivStatus(raw: String): HivStatus = HivStatus.entries.find { it.code == raw.lowercase() } ?: HivStatus.UNKNOWN
 }
 
 // ── Permission-based access control ────────────────────────────────────────
@@ -104,7 +113,8 @@ enum class WorkflowArea {
     WARDS,
     ADMIN,
     REPORTS,
-    SETTINGS
+    SETTINGS,
+    MOH_REPORTS
 }
 
 enum class UserRole {
@@ -309,13 +319,13 @@ class HospitalState {
 
     fun allPatients(): List<Patient> = patients.toList()
 
+    fun receptionQueue(): List<QueueItem> = emptyList()
+
     fun adminKpis(): List<DashboardMetric> = emptyList()
 
-    fun registrationTrend(): List<TrendPoint> = emptyList()
-
-    fun departmentComparison(): List<DepartmentMetric> = emptyList()
-
     fun bottleneckHeatmap(): List<BottleneckCell> = emptyList()
+
+    fun registrationTrend(): List<TrendPoint> = emptyList()
 
     fun wardOverview(): WardOverview = WardOverview(
         occupancyPercent = 0,
@@ -323,6 +333,10 @@ class HospitalState {
         nurseWorkload = "N/A",
         alerts = emptyList()
     )
+
+    fun wardBeds(): List<WardBed> = emptyList()
+
+    fun metrics(): List<DashboardMetric> = adminKpis()
 
     fun bedBoard(): List<BedCard> = patients
         .filter { it.assignedWard != null && it.roomBed != null }
@@ -355,24 +369,6 @@ class HospitalState {
 
     fun shiftHandoffSummary(shift: Shift): List<String> = emptyList()
 
-    fun globalNavItemsFor(role: UserRole): List<NavItem> {
-        val allowed = when (role) {
-            UserRole.RECEPTIONIST -> setOf(WorkflowArea.RECEPTION, WorkflowArea.REPORTS)
-            UserRole.DOCTOR -> setOf(WorkflowArea.CONSULTATION, WorkflowArea.DIAGNOSIS, WorkflowArea.WARDS)
-            UserRole.NURSE -> setOf(WorkflowArea.WARDS, WorkflowArea.CONSULTATION)
-            UserRole.ADMIN -> WorkflowArea.entries.toSet()
-        }
-        return WorkflowArea.entries
-            .filter { it in allowed }
-            .map { area ->
-                NavItem(
-                    area = area,
-                    label = area.name.lowercase().replaceFirstChar { it.uppercase() },
-                    visibilityAnnotation = if (role == UserRole.ADMIN) "" else "Role: $role"
-                )
-            }
-    }
-
     fun globalActions(): List<GlobalAction> = listOf(
         GlobalAction("Search"),
         GlobalAction("Register Patient"),
@@ -383,15 +379,8 @@ class HospitalState {
     fun breadcrumbFor(area: WorkflowArea): List<String> =
         listOf("Home", area.name.lowercase().replaceFirstChar { it.uppercase() })
 
-    fun metrics(): List<DashboardMetric> = adminKpis()
-
-    fun configurationSets(): List<ConfigDictionary> = emptyList()
-
-    fun receptionQueue(): List<QueueItem> = emptyList()
-
-    fun wardBeds(): List<WardBed> = emptyList()
-
     private val pendingStk = mutableListOf<String>()
+    private val auditEvents = mutableListOf<AuditEvent>()
 
     fun reconcilePendingStkRequests(lookup: (String) -> StkRequestStatus) {
         pendingStk.removeAll { requestId -> lookup(requestId) != StkRequestStatus.PENDING }
@@ -400,10 +389,14 @@ class HospitalState {
     fun syncHealth(): SyncHealthStatus = SyncHealthStatus(
         status = "healthy",
         pendingCount = pendingStk.size,
-        lastSyncTime = System.currentTimeMillis()
+        lastSyncTime = Clock.System.now().toEpochMilliseconds()
     )
 
     fun pendingStkRequests(): List<String> = pendingStk.toList()
 
-    fun auditTrail(): List<AuditEvent> = emptyList()
+    fun auditTrail(): List<AuditEvent> = auditEvents.toList()
+
+    fun logEvent(event: AuditEvent) {
+        auditEvents.add(0, event)
+    }
 }

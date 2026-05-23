@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
 }
@@ -8,9 +7,6 @@ plugins {
 tasks.register("prepareKotlinBuildScriptModel") {}
 tasks.register("prepareKotlinIdeaImport") {}
 
-kotlin {
-    jvmToolchain(21)
-}
 
 android {
     namespace = "com.egesa.clinic.android"
@@ -24,7 +20,26 @@ android {
         versionName = "0.1.0"
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    buildTypes {
+        debug {
+            // Emulator/LAN dev default; override per-environment as needed.
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080\"")
+            buildConfigField("boolean", "ALLOW_MOCK_FALLBACK", "true")
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
+        release {
+            // MUST be HTTPS for hospital use. Set this to your cloud API domain.
+            buildConfigField("String", "API_BASE_URL", "\"https://api.example.com\"")
+            buildConfigField("boolean", "ALLOW_MOCK_FALLBACK", "false")
+            isMinifyEnabled = false
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21

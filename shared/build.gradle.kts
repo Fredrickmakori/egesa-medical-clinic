@@ -12,7 +12,7 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(21)
+    applyDefaultHierarchyTemplate()
     androidTarget {
     }
     jvm()
@@ -23,20 +23,32 @@ kotlin {
                 outputFileName = "shared.js"
                 devServer = (devServer ?: org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig.DevServer()).apply {
                     open = true
+                    // Disable overlay to prevent ReferenceError: document is not defined in Web Workers
+                    client = org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig.DevServer.Client(
+                        overlay = false
+                    )
                 }
             }
         }
         binaries.executable()
     }
 
-    listOf(
-        iosX64(),
-        iosArm64(),
+    // iOS targets require a macOS host for building/running.
+    // On Windows/Linux, keeping these enabled can break IDE import/sync (appleMain/iosMain resolvers).
+    val enableIos = (findProperty("enableIos") as? String)?.equals("true", ignoreCase = true) == true
+    val isMacHost = System.getProperty("os.name").contains("Mac", ignoreCase = true)
+    if (enableIos || isMacHost) {
+        iosX64()
+        iosArm64()
         iosSimulatorArm64()
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
-            baseName = "shared"
-            isStatic = true
+    }
+
+    targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
+        if (name.startsWith("ios")) {
+            binaries.framework {
+                baseName = "shared"
+                isStatic = true
+            }
         }
     }
 
@@ -55,6 +67,8 @@ kotlin {
             implementation(compose.foundation)
             @Suppress("DEPRECATION") implementation(compose.material3)
             implementation(compose.ui)
+            implementation(compose.components.resources)
+            implementation(compose.materialIconsExtended)
         }
         val jvmMain by getting {
             dependencies {
@@ -67,11 +81,9 @@ kotlin {
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.sqldelight.android.driver)
         }
-        val iosMain by creating {
-            dependencies {
-                implementation(libs.ktor.client.darwin)
-                implementation(libs.sqldelight.native.driver)
-            }
+        findByName("iosMain")?.dependencies {
+            implementation(libs.ktor.client.darwin)
+            implementation(libs.sqldelight.native.driver)
         }
         val wasmJsMain by getting {
             dependencies {

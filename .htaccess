@@ -1,0 +1,124 @@
+# Apache configuration for Egesa Medical Clinic web platform
+# Place this file in the web root directory where index.html is located
+
+# Enable mod_rewrite
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Remove .html extension for SPA routing
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.html [QSA,L]
+</IfModule>
+
+# ========================================
+# MIME Types Configuration
+# ========================================
+
+<IfModule mod_mime.c>
+    # WebAssembly
+    AddType application/wasm .wasm
+
+    # JavaScript (ensure correct MIME type)
+    AddType application/javascript .js .mjs
+
+    # Fonts
+    AddType application/font-woff .woff
+    AddType application/font-woff2 .woff2
+    AddType application/vnd.ms-fontobject .eot
+    AddType application/x-font-ttf .ttf
+
+    # SVG
+    AddType image/svg+xml .svg
+
+    # JSON
+    AddType application/json .json
+</IfModule>
+
+# ========================================
+# CORS Headers
+# ========================================
+
+<IfModule mod_headers.c>
+    # Enable CORS
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+
+    # Security Headers
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+
+    # Cache versioned assets for 1 year
+    <FilesMatch "\.(js|wasm|mjs)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    # Cache other assets for 30 days
+    <FilesMatch "\.(css|svg|png|jpg|jpeg|gif|ico|woff|woff2)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+
+    # Don't cache HTML files
+    <FilesMatch "\.html?$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+</IfModule>
+
+# ========================================
+# Gzip Compression
+# ========================================
+
+<IfModule mod_deflate.c>
+    # Compress text files
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    AddOutputFilterByType DEFLATE application/xml application/javascript application/json
+    AddOutputFilterByType DEFLATE text/javascript
+
+    # Exclude WASM files from gzip (already compressed)
+    SetEnvIfNoCase Request_URI "\.wasm$" no-gzip
+
+    # Compression level
+    DeflateCompressionLevel 6
+</IfModule>
+
+# ========================================
+# Security
+# ========================================
+
+# Disable directory listing
+Options -Indexes
+
+# Disable access to hidden files
+<FilesMatch "^\." >
+    Deny from all
+</FilesMatch>
+
+# ========================================
+# ETags (helps with caching)
+# ========================================
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    DefaultExpiresByType text/html "now plus 0 seconds"
+    DefaultExpiresByType application/javascript "now plus 1 year"
+    DefaultExpiresByType application/wasm "now plus 1 year"
+    DefaultExpiresByType text/css "now plus 1 year"
+    DefaultExpiresByType image/svg+xml "now plus 1 month"
+</IfModule>
+
+# ========================================
+# Standard HTTP Headers
+# ========================================
+
+# UTF-8 encoding
+AddDefaultCharset utf-8
+
+# Keep-Alive
+<IfModule mod_headers.c>
+    Header set Connection keep-alive
+</IfModule>
+

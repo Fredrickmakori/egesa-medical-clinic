@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm")
-    id("io.ktor.plugin")
+    alias(libs.plugins.kotlin.jvm)
+    application
 }
 
 group = "com.egesa"
@@ -12,14 +12,11 @@ application {
 
 dependencies {
     implementation(project(":shared"))
-    implementation("io.ktor:ktor-server-core-jvm:2.3.12")
-    implementation("io.ktor:ktor-server-netty-jvm:2.3.12")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm:2.3.12")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:2.3.12")
-    implementation("ch.qos.logback:logback-classic:1.5.8")
-}
-
-
-kotlin {
-    jvmToolchain(21)
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.netty)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.server.auth)
+    implementation(libs.ktor.server.auth.jwt)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.logback.classic)
 }

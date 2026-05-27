@@ -1,8 +1,103 @@
 package com.egesa.clinic.shared
 
+import com.egesa.clinic.shared.sync.SyncHealthStatus
+
+import kotlin.jvm.JvmInline
 import kotlinx.serialization.Serializable
 
+interface CodeEnum { val code: String }
+
+object DomainValidation {
+    fun requireCode(field: String, value: String, allowed: Set<String>): String {
+        val normalized = value.trim().lowercase().replace("_", "-").replace(" ", "-")
+        require(normalized in allowed) { "Invalid $field: '$value'" }
+        return normalized
+    }
+}
+
+@JvmInline
+@Serializable
+value class LegacyMappableCode private constructor(val value: String) {
+    companion object {
+        fun from(field: String, raw: String, aliases: Map<String, String>, allowed: Set<String>): LegacyMappableCode {
+            val normalized = raw.trim().lowercase().replace("_", "-").replace(" ", "-")
+            val mapped = aliases[normalized] ?: normalized
+            return LegacyMappableCode(DomainValidation.requireCode(field, mapped, allowed))
+        }
+    }
+}
+
+enum class Sex(override val code: String) : CodeEnum { MALE("male"), FEMALE("female"), INTERSEX("intersex"), UNKNOWN("unknown") }
+enum class VisitType(override val code: String) : CodeEnum { OUTPATIENT("outpatient"), INPATIENT("inpatient"), EMERGENCY("emergency"), FOLLOW_UP("follow-up"), ANC("anc") }
+enum class Disposition(override val code: String) : CodeEnum { ADMITTED("admitted"), DISCHARGED("discharged"), TRANSFERRED("transferred"), REFERRED("referred"), DECEASED("deceased") }
+enum class FetalPresentation(override val code: String) : CodeEnum { CEPHALIC("cephalic"), BREECH("breech"), TRANSVERSE("transverse"), OBLIQUE("oblique"), UNKNOWN("unknown") }
+enum class DeliveryMode(override val code: String) : CodeEnum { SVD("svd"), ASSISTED_VAGINAL("assisted-vaginal"), CESAREAN("cesarean"), VBAC("vbac") }
+enum class DeliveryOutcome(override val code: String) : CodeEnum { LIVE_BIRTH("live-birth"), STILL_BIRTH("still-birth"), NEONATAL_DEATH("neonatal-death") }
+enum class WhoStage(override val code: String) : CodeEnum { STAGE_1("stage-1"), STAGE_2("stage-2"), STAGE_3("stage-3"), STAGE_4("stage-4") }
+enum class HivStatus(override val code: String) : CodeEnum { POSITIVE("positive"), NEGATIVE("negative"), UNKNOWN("unknown"), EXPOSED("exposed") }
+enum class AdherenceRating(override val code: String) : CodeEnum { GOOD("good"), FAIR("fair"), POOR("poor") }
+enum class CohortStatus(override val code: String) : CodeEnum { ACTIVE("active"), LOST_TO_FOLLOW_UP("lost-to-follow-up"), TRANSFERRED_OUT("transferred-out"), DECEASED("deceased"), STOPPED("stopped") }
+enum class MuacStatus(override val code: String) : CodeEnum { GREEN("green"), YELLOW("yellow"), RED("red") }
+enum class Complication(override val code: String) : CodeEnum { NONE("none"), FEVER("fever"), HEMORRHAGE("hemorrhage"), SEPSIS("sepsis"), ECLAMPSIA("eclampsia"), OTHER("other") }
+
+object LegacyCodeMapper {
+    private fun <T : Enum<T>> codeSet(values: Array<T>): Set<String> where T : CodeEnum = values.map { it.code }.toSet()
+    fun sex(raw: String): Sex = Sex.entries.first { it.code == LegacyMappableCode.from("sex", raw, mapOf("m" to "male", "f" to "female"), codeSet(Sex.entries.toTypedArray())).value }
+}
+
+// ── Permission-based access control ────────────────────────────────────────
+enum class Permission {
+    // Patient management
+    PATIENT_CREATE, PATIENT_READ, PATIENT_UPDATE, PATIENT_DELETE,
+
+    // Clinical operations
+    CONSULTATION_WRITE, DIAGNOSIS_WRITE, PRESCRIPTION_WRITE,
+
+    // Ward operations
+    WARD_ADMISSION, WARD_DISCHARGE, WARD_TRANSFER,
+
+    // Billing/Payment
+    PAYMENT_INITIATE, PAYMENT_APPROVE,
+
+    // Admin functions
+    STAFF_MANAGE, AUDIT_VIEW, SYSTEM_CONFIG
+}
+
+data class RolePermissionMap(
+    val role: UserRole,
+    val permissions: Set<Permission>
+) {
+    companion object {
+        val DEFAULTS = mapOf(
+            UserRole.RECEPTIONIST to setOf(
+                Permission.PATIENT_CREATE, Permission.PATIENT_READ,
+                Permission.PAYMENT_INITIATE
+            ),
+            UserRole.DOCTOR to setOf(
+                Permission.PATIENT_READ, Permission.PATIENT_UPDATE,
+                Permission.CONSULTATION_WRITE,
+                Permission.DIAGNOSIS_WRITE, Permission.PRESCRIPTION_WRITE,
+                Permission.WARD_ADMISSION, Permission.WARD_DISCHARGE,
+                Permission.WARD_TRANSFER
+            ),
+            UserRole.NURSE to setOf(
+                Permission.PATIENT_READ, Permission.PATIENT_UPDATE,
+                Permission.CONSULTATION_WRITE,
+                Permission.WARD_ADMISSION, Permission.WARD_TRANSFER
+            ),
+            UserRole.ADMIN to Permission.entries.toSet()
+        )
+
+        fun permissionsFor(role: UserRole): Set<Permission> =
+            DEFAULTS[role] ?: emptySet()
+
+        fun hasPermission(role: UserRole, permission: Permission): Boolean =
+            permissionsFor(role).contains(permission)
+    }
+}
+
 enum class WorkflowArea {
+    DASHBOARD,
     RECEPTION,
     CONSULTATION,
     DIAGNOSIS,
@@ -24,18 +119,56 @@ enum class Shift {
     NIGHT
 }
 
+enum class TimelineEventType {
+    CONSULTATION, LAB, MEDICATION, PROCEDURE, DISCHARGE, NOTE
+}
+
+@Serializable
+data class TimelineEvent(
+    val title: String,
+    val details: String,
+    val type: TimelineEventType,
+    val timestamp: String
+)
+
+enum class SaveState { DRAFT_SAVED, UNSAVED_CHANGES, FINAL_SIGN_OFF }
+
+data class EncounterForm(
+    val chiefComplaint: String = "",
+    val history: String = "",
+    val examination: String = "",
+    val diagnosis: String = "",
+    val plan: String = ""
+)
+
+enum class StkRequestStatus { PENDING, SUCCESS, FAILED }
+
+data class NavItem(
+    val area: WorkflowArea,
+    val label: String,
+    val visibilityAnnotation: String = ""
+)
+
+data class GlobalAction(val label: String)
+
+@Serializable
 data class Patient(
     val id: String,
     val fullName: String,
     val age: Int,
-    val sex: String,
+    val sex: Sex,
     val status: String,
     val assignedWard: String? = null,
     val roomBed: String? = null,
     val acuity: String = "Moderate",
-    val isolation: String? = null
+    val isolation: String? = null,
+    val visits: Int = 0,
+    val activeDiagnosis: String = "",
+    val currentMedications: List<String> = emptyList(),
+    val timeline: List<TimelineEvent> = emptyList()
 )
 
+@Serializable
 data class DashboardMetric(
     val title: String,
     val value: String,
@@ -72,12 +205,22 @@ data class AuditEvent(
     val action: String,
     val module: String,
     val timestamp: String,
-    val contextReference: String
+    val contextReference: String,
+    val userId: String = "",
+    val permission: Permission? = null,
+    val granted: Boolean = true
 )
 
 data class ConfigDictionary(
     val title: String,
     val entries: List<String>
+)
+
+data class StaffMember(
+    val id: String,
+    val fullName: String,
+    val role: UserRole,
+    val department: String,
 )
 
 @Serializable
@@ -98,6 +241,29 @@ data class WardBed(
 data class CloudSyncConfig(
     val baseUrl: String,
     val anonKey: String
+)
+
+// ── Sync-related data classes ──────────────────────────────────────────────
+
+@Serializable
+data class SyncPatientDataResponse(
+    val patients: List<Patient>,
+    val remoteVersion: Long,
+    val count: Int
+)
+
+@Serializable
+data class SyncResultItem(
+    val id: String,
+    val status: String,  // synced, failed, conflict
+    val version: Int
+)
+
+@Serializable
+data class ConflictResolutionResult(
+    val resolved: Boolean,
+    val strategy: String,
+    val finalVersion: Int
 )
 
 data class WardOverview(
@@ -139,53 +305,23 @@ data class WardCensusRow(
 )
 
 class HospitalState {
-    private val patients = mutableListOf(
-        Patient("PT-001", "Amina Yusuf", 34, "F", "Awaiting consultation"),
-        Patient("PT-002", "John Ouma", 58, "M", "In diagnosis"),
-        Patient("PT-003", "Martha Wekesa", 12, "F", "Admitted", "Pediatrics", "P-12A", "High", "Contact"),
-        Patient("PT-004", "Samuel Kibet", 70, "M", "Admitted", "Medical", "M-04B", "Critical", "Droplet"),
-        Patient("PT-005", "Naomi Atieno", 27, "F", "Admitted", "Surgical", "S-08A", "Moderate", null)
-    )
+    private val patients = mutableListOf<Patient>()
 
     fun allPatients(): List<Patient> = patients.toList()
 
-    fun adminKpis(): List<DashboardMetric> = listOf(
-        DashboardMetric("Registrations / Day", "126", "+8% vs yesterday"),
-        DashboardMetric("Consultation Throughput", "93", "patients completed"),
-        DashboardMetric("Avg Turnaround", "48 min", "triage → discharge"),
-        DashboardMetric("Ward Occupancy", "82%", "164 / 200 beds"),
-        DashboardMetric("Discharge Rate", "71%", "within 72 hours")
-    )
+    fun adminKpis(): List<DashboardMetric> = emptyList()
 
-    fun registrationTrend(): List<TrendPoint> = listOf(
-        TrendPoint("Mon", 104),
-        TrendPoint("Tue", 110),
-        TrendPoint("Wed", 122),
-        TrendPoint("Thu", 118),
-        TrendPoint("Fri", 126)
-    )
+    fun registrationTrend(): List<TrendPoint> = emptyList()
 
-    fun departmentComparison(): List<DepartmentMetric> = listOf(
-        DepartmentMetric("Emergency", 44, 37),
-        DepartmentMetric("Outpatient", 68, 44),
-        DepartmentMetric("Pediatrics", 39, 51),
-        DepartmentMetric("Maternity", 31, 56),
-        DepartmentMetric("Surgery", 22, 73)
-    )
+    fun departmentComparison(): List<DepartmentMetric> = emptyList()
 
-    fun bottleneckHeatmap(): List<BottleneckCell> = listOf(
-        BottleneckCell("Triage", "Medium", 9),
-        BottleneckCell("Consultation", "High", 17),
-        BottleneckCell("Lab", "Critical", 21),
-        BottleneckCell("Pharmacy", "Low", 4),
-        BottleneckCell("Discharge", "Medium", 11)
-    )
+    fun bottleneckHeatmap(): List<BottleneckCell> = emptyList()
 
     fun wardOverview(): WardOverview = WardOverview(
-        occupancyPercent = 82,
-        bedsAvailable = 14,
-        nurseWorkload = "1:6 avg ratio",
-        alerts = listOf("2 sepsis screens overdue", "1 fall-risk reassessment due", "Isolation PPE stock low")
+        occupancyPercent = 0,
+        bedsAvailable = 0,
+        nurseWorkload = "N/A",
+        alerts = emptyList()
     )
 
     fun bedBoard(): List<BedCard> = patients
@@ -213,30 +349,61 @@ class HospitalState {
         )
     )
 
-    fun nursingTasks(): List<NursingTask> = listOf(
-        NursingTask("Meds Due", "PT-004 Piperacillin/Tazobactam IV", "09:00", "High"),
-        NursingTask("Vitals", "PT-003 q4h vitals & pain score", "10:00", "Medium"),
-        NursingTask("Procedure", "PT-005 dressing change", "11:30", "High"),
-        NursingTask("Handover", "Flag pending lab for PT-002", "Shift end", "Medium")
-    )
+    fun nursingTasks(): List<NursingTask> = emptyList()
 
-    fun wardCensus(): List<WardCensusRow> = listOf(
-        WardCensusRow("Medical", 26, 30, 6, 2),
-        WardCensusRow("Surgical", 22, 28, 4, 1),
-        WardCensusRow("Pediatrics", 18, 24, 3, 2)
-    )
+    fun wardCensus(): List<WardCensusRow> = emptyList()
 
-    fun shiftHandoffSummary(shift: Shift): List<String> = when (shift) {
-        Shift.DAY -> listOf(
-            "Admissions: 5 | Transfers: 2 | Discharges: 3",
-            "Critical watchlist: PT-004, PT-011",
-            "Pending diagnostics: 4 CBC, 2 blood cultures"
-        )
+    fun shiftHandoffSummary(shift: Shift): List<String> = emptyList()
 
-        Shift.NIGHT -> listOf(
-            "Overnight events: 1 rapid response, stabilized",
-            "High-risk meds double-check completed",
-            "Morning rounds prep complete for all wards"
-        )
+    fun globalNavItemsFor(role: UserRole): List<NavItem> {
+        val allowed = when (role) {
+            UserRole.RECEPTIONIST -> setOf(WorkflowArea.RECEPTION, WorkflowArea.REPORTS)
+            UserRole.DOCTOR -> setOf(WorkflowArea.CONSULTATION, WorkflowArea.DIAGNOSIS, WorkflowArea.WARDS)
+            UserRole.NURSE -> setOf(WorkflowArea.WARDS, WorkflowArea.CONSULTATION)
+            UserRole.ADMIN -> WorkflowArea.entries.toSet()
+        }
+        return WorkflowArea.entries
+            .filter { it in allowed }
+            .map { area ->
+                NavItem(
+                    area = area,
+                    label = area.name.lowercase().replaceFirstChar { it.uppercase() },
+                    visibilityAnnotation = if (role == UserRole.ADMIN) "" else "Role: $role"
+                )
+            }
     }
+
+    fun globalActions(): List<GlobalAction> = listOf(
+        GlobalAction("Search"),
+        GlobalAction("Register Patient"),
+        GlobalAction("Alerts"),
+        GlobalAction("Profile")
+    )
+
+    fun breadcrumbFor(area: WorkflowArea): List<String> =
+        listOf("Home", area.name.lowercase().replaceFirstChar { it.uppercase() })
+
+    fun metrics(): List<DashboardMetric> = adminKpis()
+
+    fun configurationSets(): List<ConfigDictionary> = emptyList()
+
+    fun receptionQueue(): List<QueueItem> = emptyList()
+
+    fun wardBeds(): List<WardBed> = emptyList()
+
+    private val pendingStk = mutableListOf<String>()
+
+    fun reconcilePendingStkRequests(lookup: (String) -> StkRequestStatus) {
+        pendingStk.removeAll { requestId -> lookup(requestId) != StkRequestStatus.PENDING }
+    }
+
+    fun syncHealth(): SyncHealthStatus = SyncHealthStatus(
+        status = "healthy",
+        pendingCount = pendingStk.size,
+        lastSyncTime = System.currentTimeMillis()
+    )
+
+    fun pendingStkRequests(): List<String> = pendingStk.toList()
+
+    fun auditTrail(): List<AuditEvent> = emptyList()
 }

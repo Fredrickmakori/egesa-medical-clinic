@@ -10,11 +10,6 @@ interface MpesaGateway {
     suspend fun queryStkStatus(checkoutRequestId: String): MpesaPaymentResult
 }
 
-/**
- * Platform-agnostic persistence contract for payment records.
- *
- * This contract intentionally avoids coupling to any specific database, ORM, or transport.
- */
 interface PaymentRepository {
     suspend fun savePayment(record: PaymentRecord)
     suspend fun updatePayment(record: PaymentRecord)

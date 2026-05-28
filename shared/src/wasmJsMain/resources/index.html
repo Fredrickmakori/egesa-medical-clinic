@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Egesa Medical Clinic</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        #root {
+            width: 100%;
+            height: 100%;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-size: 18px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="root" class="loading">
+        <div>Initializing Egesa Medical Clinic...</div>
+    </div>
+
+    <!-- Load shared Kotlin/WASM bundle -->
+    <script type="application/javascript" src="shared.js"></script>
+
+    <!-- Initialize database worker and app after bundle loads -->
+    <script type="application/javascript">
+        // Wait for Kotlin to be loaded
+        if (typeof window.setTimeout !== 'undefined') {
+            setTimeout(() => {
+                // The main() function from Kotlin will be called automatically
+                // Database worker is initialized via WebWorkerDriver in Kotlin
+            }, 100);
+        }
+    </script>
+</body>
+</html>

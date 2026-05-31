@@ -20,6 +20,8 @@ data class VitalSignsInput(
     val vitalSignsId: String,
     val encounterId: String,
     val weightKg: Double? = null,
+    val heightCm: Double? = null,
+    val bmi: Double? = null,
     val temperatureC: Double? = null,
     val systolicBp: Long? = null,
     val diastolicBp: Long? = null,
@@ -76,6 +78,66 @@ data class HtsRegisterInput(
     val remarks: String? = null
 )
 
+data class PatientRegistrationInput(
+    val id: String,
+    val fullName: String,
+    val age: Int,
+    val sex: Sex,
+    val status: String = "Checked in",
+    val assignedWard: String? = null,
+    val roomBed: String? = null,
+    val acuity: String = "Moderate",
+    val isolation: String? = null
+)
+
+data class RegistrationClinicalInput(
+    val weightKg: Double? = null,
+    val heightCm: Double? = null,
+    val bmi: Double? = null,
+    val temperatureC: Double? = null,
+    val systolicBp: Long? = null,
+    val diastolicBp: Long? = null,
+    val pulseBpm: Long? = null,
+    val respiratoryRate: Long? = null,
+    val spo2Percent: Double? = null,
+    val muacCm: Double? = null,
+    val queueDestination: String? = null,
+    val queuePriority: String? = null,
+    val queueNote: String? = null
+)
+
+data class PatientDocumentInput(
+    val documentId: String,
+    val patientId: String,
+    val documentType: String,
+    val imageUri: String,
+    val verificationStatus: String = "PENDING",
+    val extractedFullName: String? = null,
+    val extractedIdentifier: String? = null,
+    val extractedBirthDate: String? = null,
+    val extractedSex: String? = null,
+    val extractedGuardianName: String? = null,
+    val notes: String? = null,
+    val capturedAt: String = Clock.System.now().toString()
+)
+
+data class ServiceEventInput(
+    val serviceEventId: String,
+    val encounterId: String,
+    val program: String,
+    val indicatorCategory: String,
+    val serviceCode: String? = null,
+    val valueText: String? = null,
+    val quantity: Long = 1,
+    val eventDatetime: String = Clock.System.now().toString()
+)
+
+data class PatientChart(
+    val patient: Patient,
+    val encounters: List<EncounterDto> = emptyList(),
+    val documents: List<PatientDocumentDto> = emptyList()
+)
+
 data class MohHtsTally(
     val gender: Sex,
     val ageGroup: String,
@@ -110,6 +172,84 @@ class LocalRepository(database: ClinicDatabase) {
         )
     }
 
+    suspend fun getAllPatients(): List<Patient> =
+        dbQueries.selectAllPatients().awaitAsList().map {
+            Patient(
+                id = it.id,
+                fullName = it.fullName,
+                age = it.age.toInt(),
+                sex = LegacyCodeMapper.sex(it.sex),
+                status = it.status,
+                assignedWard = it.assignedWard,
+                roomBed = it.roomBed,
+                acuity = it.acuity,
+                isolation = it.isolation
+            )
+        }
+
+    suspend fun upsertPatient(input: PatientRegistrationInput) {
+        dbQueries.upsertPatient(
+            id = input.id,
+            fullName = input.fullName,
+            age = input.age.toLong(),
+            sex = input.sex.code,
+            status = input.status,
+            assignedWard = input.assignedWard,
+            roomBed = input.roomBed,
+            acuity = input.acuity,
+            isolation = input.isolation,
+            version = 1,
+            syncedAt = null
+        )
+        queueSync("PatientEntity", input.id, "UPSERT", "{}")
+    }
+
+    suspend fun getPatientChart(patientId: String): PatientChart? {
+        val row = dbQueries.selectPatientById(patientId).awaitAsOneOrNull() ?: return null
+        val patient = Patient(
+            id = row.id,
+            fullName = row.fullName,
+            age = row.age.toInt(),
+            sex = LegacyCodeMapper.sex(row.sex),
+            status = row.status,
+            assignedWard = row.assignedWard,
+            roomBed = row.roomBed,
+            acuity = row.acuity,
+            isolation = row.isolation
+        )
+        return PatientChart(
+            patient = patient,
+            encounters = dbQueries.selectEncountersByPatient(patient_id = patientId).awaitAsList().map {
+                EncounterDto(
+                    encounterId = it.encounter_id,
+                    patientId = it.patient_id,
+                    encounterDatetime = it.encounter_datetime,
+                    department = it.department,
+                    visitType = it.visit_type,
+                    providerId = it.provider_id,
+                    facilityId = it.facility_id,
+                    syncState = it.sync_state
+                )
+            },
+            documents = dbQueries.selectPatientDocuments(patient_id = patientId).awaitAsList().map {
+                PatientDocumentDto(
+                    documentId = it.document_id,
+                    patientId = it.patient_id,
+                    documentType = it.document_type,
+                    imageUri = it.image_uri,
+                    verificationStatus = it.verification_status,
+                    extractedFullName = it.extracted_full_name,
+                    extractedIdentifier = it.extracted_identifier,
+                    extractedBirthDate = it.extracted_birth_date,
+                    extractedSex = it.extracted_sex,
+                    extractedGuardianName = it.extracted_guardian_name,
+                    notes = it.notes,
+                    capturedAt = it.captured_at
+                )
+            }
+        )
+    }
+
     suspend fun createEncounter(input: EncounterInput) {
         dbQueries.insertEncounter(
             encounter_id = input.encounterId,
@@ -135,6 +275,8 @@ class LocalRepository(database: ClinicDatabase) {
             vital_signs_id = input.vitalSignsId,
             encounter_id = input.encounterId,
             weight_kg = input.weightKg,
+            height_cm = input.heightCm,
+            bmi = input.bmi,
             temperature_c = input.temperatureC,
             systolic_bp = input.systolicBp,
             diastolic_bp = input.diastolicBp,
@@ -144,6 +286,39 @@ class LocalRepository(database: ClinicDatabase) {
             muac_cm = input.muacCm,
             recorded_at = input.recordedAt
         )
+    }
+
+    suspend fun insertPatientDocument(input: PatientDocumentInput) {
+        dbQueries.insertPatientDocument(
+            document_id = input.documentId,
+            patient_id = input.patientId,
+            document_type = input.documentType,
+            image_uri = input.imageUri,
+            verification_status = input.verificationStatus,
+            extracted_full_name = input.extractedFullName,
+            extracted_identifier = input.extractedIdentifier,
+            extracted_birth_date = input.extractedBirthDate,
+            extracted_sex = input.extractedSex,
+            extracted_guardian_name = input.extractedGuardianName,
+            notes = input.notes,
+            captured_at = input.capturedAt
+        )
+        queueSync("PatientDocumentEntity", input.documentId, "UPSERT", "{}")
+    }
+
+    suspend fun upsertServiceEvent(input: ServiceEventInput) {
+        dbQueries.insertServiceEvent(
+            service_event_id = input.serviceEventId,
+            encounter_id = input.encounterId,
+            program = input.program,
+            indicator_category = input.indicatorCategory,
+            service_code = input.serviceCode,
+            value_text = input.valueText,
+            quantity = input.quantity,
+            event_datetime = input.eventDatetime,
+            sync_state = "LOCAL_ONLY"
+        )
+        queueSync("ServiceEventEntity", input.serviceEventId, "UPSERT", "{}")
     }
 
     suspend fun getVitalSignsByEncounter(encounterId: String) =

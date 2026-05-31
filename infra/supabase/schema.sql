@@ -120,6 +120,8 @@ create table if not exists public.vital_signs (
   vital_signs_id text primary key,
   encounter_id text not null references public.encounters(encounter_id) on delete cascade,
   weight_kg numeric(6,2),
+  height_cm numeric(6,2),
+  bmi numeric(5,2),
   temperature_c numeric(4,1),
   systolic_bp integer,
   diastolic_bp integer,
@@ -137,6 +139,21 @@ create table if not exists public.diagnosis (
   is_primary boolean not null default false,
   code_system text,
   diagnosis_code text
+);
+
+create table if not exists public.patient_documents (
+  document_id text primary key,
+  patient_id text not null references public.patients(id) on delete cascade,
+  document_type text not null,
+  image_uri text not null,
+  verification_status text not null default 'PENDING_REVIEW',
+  extracted_full_name text,
+  extracted_identifier text,
+  extracted_birth_date text,
+  extracted_sex text,
+  extracted_guardian_name text,
+  notes text,
+  captured_at timestamptz not null default now()
 );
 
 create table if not exists public.medication_order (

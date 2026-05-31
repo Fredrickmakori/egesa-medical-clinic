@@ -4,6 +4,8 @@ import androidx.compose.runtime.*
 import com.egesa.clinic.shared.data.FakeRepository
 import com.egesa.clinic.shared.data.KtorClinicApi
 import com.egesa.clinic.shared.data.LocalRepository
+import com.egesa.clinic.shared.data.DocumentCaptureGateway
+import com.egesa.clinic.shared.data.NoopDocumentCaptureGateway
 import com.egesa.clinic.shared.db.ClinicDatabase
 import com.egesa.clinic.shared.db.DatabaseDriverFactory
 import com.egesa.clinic.shared.ui.navigation.SessionState
@@ -15,6 +17,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.header
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
 
 enum class ClientPlatform { Desktop, Tablet }
 
@@ -24,6 +27,7 @@ fun ClinicApp(
     databaseDriverFactory: DatabaseDriverFactory,
     apiBaseUrl: String? = null,
     allowMockFallback: Boolean = true,
+    documentCaptureGateway: DocumentCaptureGateway = NoopDocumentCaptureGateway,
 ) {
     var localRepository by remember { mutableStateOf<LocalRepository?>(null) }
 
@@ -41,7 +45,10 @@ fun ClinicApp(
         // Initialize ClinicApi for backend communication
         val httpClient = HttpClient {
             install(ContentNegotiation) {
-                json()
+                json(Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                })
             }
             // Bearer token is installed after login via FakeRepository.accessToken.
             // Server endpoints are JWT-protected; without this header requests will be rejected.
@@ -83,7 +90,12 @@ fun ClinicApp(
         } else {
             // ResponsiveShell automatically adapts to screen size
             // No need to manually switch between Desktop/Tablet layouts
-            ResponsiveShell(session!!, localRepository!!, onLogout = { session = null })
+            ResponsiveShell(
+                session = session!!,
+                localRepository = localRepository!!,
+                documentCaptureGateway = documentCaptureGateway,
+                onLogout = { session = null }
+            )
         }
     }
 }

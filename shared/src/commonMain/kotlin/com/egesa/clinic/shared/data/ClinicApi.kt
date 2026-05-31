@@ -13,9 +13,13 @@ import kotlinx.serialization.Serializable
 
 interface ClinicApi {
     suspend fun login(staffId: String, pin: String): LoginResponseDto
+    suspend fun getStaff(): List<StaffMemberDto>
     suspend fun getPatients(): List<PatientDto>
     suspend fun getPatient(id: String): PatientDto?
     suspend fun getQueue(): List<QueueItemDto>
+    suspend fun registerPatient(request: PatientRegistrationDto): PatientRegistrationResponseDto
+    suspend fun checkInPatient(request: QueueCheckInRequestDto): QueueItemDto
+    suspend fun checkOutPatient(patientId: String): QueueItemDto
     suspend fun getKpis(): List<DashboardMetricDto>
     suspend fun getBottlenecks(): List<BottleneckCellDto>
     suspend fun getRegistrationTrend(): List<TrendPointDto>
@@ -27,6 +31,7 @@ interface ClinicApi {
     suspend fun getShiftHandoff(shift: Shift): List<String>
     suspend fun syncPatientData(remoteVersion: Long): SyncPatientDataDto
     suspend fun uploadPatientChanges(changes: List<PatientDto>): List<SyncResultItemDto>
+    suspend fun uploadClinicalChanges(batch: ClinicalSyncBatchDto): List<SyncResultItemDto>
     suspend fun resolveConflict(request: ConflictResolutionRequestDto): ConflictResolutionResultDto
 }
 
@@ -34,9 +39,19 @@ class KtorClinicApi(private val client: HttpClient, private val baseUrl: String)
     override suspend fun login(staffId: String, pin: String): LoginResponseDto =
         client.post("$baseUrl/auth/login") { contentType(ContentType.Application.Json); setBody(LoginRequestDto(staffId, pin)) }.body()
 
+    override suspend fun getStaff(): List<StaffMemberDto> = client.get("$baseUrl/auth/staff").body()
     override suspend fun getPatients(): List<PatientDto> = client.get("$baseUrl/patients").body()
     override suspend fun getPatient(id: String): PatientDto? = client.get("$baseUrl/patients/$id").body()
     override suspend fun getQueue(): List<QueueItemDto> = client.get("$baseUrl/queue").body()
+    override suspend fun registerPatient(request: PatientRegistrationDto): PatientRegistrationResponseDto =
+        client.post("$baseUrl/patients") { contentType(ContentType.Application.Json); setBody(request) }.body()
+
+    override suspend fun checkInPatient(request: QueueCheckInRequestDto): QueueItemDto =
+        client.post("$baseUrl/queue/check-in") { contentType(ContentType.Application.Json); setBody(request) }.body()
+
+    override suspend fun checkOutPatient(patientId: String): QueueItemDto =
+        client.post("$baseUrl/queue/$patientId/check-out") { contentType(ContentType.Application.Json) }.body()
+
     override suspend fun getKpis(): List<DashboardMetricDto> = client.get("$baseUrl/dashboard/kpis").body()
     override suspend fun getBottlenecks(): List<BottleneckCellDto> = client.get("$baseUrl/dashboard/bottlenecks").body()
     override suspend fun getRegistrationTrend(): List<TrendPointDto> = client.get("$baseUrl/dashboard/trend").body()
@@ -50,6 +65,9 @@ class KtorClinicApi(private val client: HttpClient, private val baseUrl: String)
     override suspend fun uploadPatientChanges(changes: List<PatientDto>): List<SyncResultItemDto> =
         client.post("$baseUrl/sync/patients/batch") { contentType(ContentType.Application.Json); setBody(changes) }.body()
 
+    override suspend fun uploadClinicalChanges(batch: ClinicalSyncBatchDto): List<SyncResultItemDto> =
+        client.post("$baseUrl/sync/clinical/batch") { contentType(ContentType.Application.Json); setBody(batch) }.body()
+
     override suspend fun resolveConflict(request: ConflictResolutionRequestDto): ConflictResolutionResultDto =
         client.post("$baseUrl/sync/resolve-conflict") { contentType(ContentType.Application.Json); setBody(request) }.body()
 }
@@ -62,13 +80,41 @@ data class LoginResponseDto(
     val role: String,
     val staffName: String
 )
+@Serializable data class StaffMemberDto(val id: String, val fullName: String, val role: String, val department: String)
 @Serializable data class PatientDto(
     val id: String, val fullName: String, val age: Int, val sex: Sex, val status: String,
     val assignedWard: String? = null, val roomBed: String? = null, val acuity: String = "Moderate",
     val isolation: String? = null, val visits: Int = 0, val activeDiagnosis: String = "",
     val currentMedications: List<String> = emptyList(), val timeline: List<TimelineEvent> = emptyList()
 )
-@Serializable data class QueueItemDto(val patientId: String, val name: String, val triageLevel: Int, val waitMinutes: Int)
+@Serializable data class PatientRegistrationDto(
+    val id: String,
+    val fullName: String,
+    val age: Int,
+    val sex: Sex,
+    val status: String = "Checked in",
+    val assignedWard: String? = null,
+    val roomBed: String? = null,
+    val acuity: String = "Moderate",
+    val isolation: String? = null,
+    val triageLevel: Int = 3
+)
+@Serializable data class PatientRegistrationResponseDto(val patient: PatientDto, val queueItem: QueueItemDto? = null)
+@Serializable data class QueueCheckInRequestDto(
+    val patientId: String,
+    val name: String,
+    val triageLevel: Int = 3,
+    val checkedInAt: String? = null
+)
+@Serializable data class QueueItemDto(
+    val patientId: String,
+    val name: String,
+    val triageLevel: Int,
+    val waitMinutes: Int,
+    val status: String = "WAITING",
+    val checkedInAt: String? = null,
+    val checkedOutAt: String? = null
+)
 @Serializable data class DashboardMetricDto(val title: String, val value: String, val subtitle: String? = null)
 @Serializable data class BottleneckCellDto(val workflowStage: String, val severity: String, val pendingCount: Int)
 @Serializable data class TrendPointDto(val label: String, val value: Int)
@@ -83,9 +129,135 @@ data class LoginResponseDto(
 @Serializable data class ConflictResolutionRequestDto(val entityId: String, val localVersion: Int, val remoteVersion: Int, val strategy: String)
 @Serializable data class ConflictResolutionResultDto(val resolved: Boolean, val strategy: String, val finalVersion: Int)
 
+@Serializable data class ClinicalSyncBatchDto(
+    val encounters: List<EncounterDto> = emptyList(),
+    val vitalSigns: List<VitalSignsDto> = emptyList(),
+    val diagnoses: List<DiagnosisDto> = emptyList(),
+    val medicationOrders: List<MedicationOrderDto> = emptyList(),
+    val encounterOutcomes: List<EncounterOutcomeDto> = emptyList(),
+    val htsEntries: List<HtsRegisterDto> = emptyList(),
+    val serviceEvents: List<ServiceEventDto> = emptyList(),
+    val patientDocuments: List<PatientDocumentDto> = emptyList()
+)
+
+@Serializable data class EncounterDto(
+    val encounterId: String,
+    val patientId: String,
+    val encounterDatetime: String,
+    val department: String,
+    val visitType: String,
+    val providerId: String? = null,
+    val facilityId: String,
+    val syncState: String = "LOCAL_ONLY"
+)
+
+@Serializable data class VitalSignsDto(
+    val vitalSignsId: String,
+    val encounterId: String,
+    val weightKg: Double? = null,
+    val heightCm: Double? = null,
+    val bmi: Double? = null,
+    val temperatureC: Double? = null,
+    val systolicBp: Long? = null,
+    val diastolicBp: Long? = null,
+    val pulseBpm: Long? = null,
+    val respiratoryRate: Long? = null,
+    val spo2Percent: Double? = null,
+    val muacCm: Double? = null,
+    val recordedAt: String
+)
+
+@Serializable data class DiagnosisDto(
+    val diagnosisId: String,
+    val encounterId: String,
+    val diagnosisText: String,
+    val isPrimary: Boolean = false,
+    val codeSystem: String? = null,
+    val diagnosisCode: String? = null
+)
+
+@Serializable data class MedicationOrderDto(
+    val medicationOrderId: String,
+    val encounterId: String,
+    val medicationName: String,
+    val dose: String? = null,
+    val route: String? = null,
+    val frequency: String? = null,
+    val duration: String? = null,
+    val instructions: String? = null
+)
+
+@Serializable data class EncounterOutcomeDto(
+    val outcomeId: String,
+    val encounterId: String,
+    val disposition: String,
+    val referralTo: String? = null,
+    val admitted: Boolean = false,
+    val dischargeNotes: String? = null
+)
+
+@Serializable data class HtsRegisterDto(
+    val htsId: String,
+    val encounterId: String,
+    val serialNumber: String? = null,
+    val htsNumber: String? = null,
+    val populationType: String,
+    val testingPoint: String,
+    val test1Result: String? = null,
+    val test2Result: String? = null,
+    val finalResult: String,
+    val coupleTesting: String? = null,
+    val recencyTestResult: String? = null,
+    val referredTo: String? = null,
+    val linkedToCare: Boolean = false,
+    val remarks: String? = null
+)
+
+@Serializable data class ServiceEventDto(
+    val serviceEventId: String,
+    val encounterId: String,
+    val program: String,
+    val indicatorCategory: String,
+    val serviceCode: String? = null,
+    val valueText: String? = null,
+    val quantity: Long = 1,
+    val eventDatetime: String,
+    val syncState: String = "LOCAL_ONLY"
+)
+
+@Serializable data class PatientDocumentDto(
+    val documentId: String,
+    val patientId: String,
+    val documentType: String,
+    val imageUri: String,
+    val verificationStatus: String,
+    val extractedFullName: String? = null,
+    val extractedIdentifier: String? = null,
+    val extractedBirthDate: String? = null,
+    val extractedSex: String? = null,
+    val extractedGuardianName: String? = null,
+    val notes: String? = null,
+    val capturedAt: String
+)
+
 fun PatientDto.toDomain() = Patient(id, fullName, age, sex, status, assignedWard, roomBed, acuity, isolation, visits, activeDiagnosis, currentMedications, timeline)
 fun Patient.toDto() = PatientDto(id, fullName, age, sex, status, assignedWard, roomBed, acuity, isolation, visits, activeDiagnosis, currentMedications, timeline)
-fun QueueItemDto.toDomain() = QueueItem(patientId, name, triageLevel, waitMinutes)
+fun PatientRegistrationDto.toPatient() = Patient(id, fullName, age, sex, status, assignedWard, roomBed, acuity, isolation)
+fun PatientRegistrationInput.toRegistrationDto(triageLevel: Int) = PatientRegistrationDto(
+    id = id,
+    fullName = fullName,
+    age = age,
+    sex = sex,
+    status = status,
+    assignedWard = assignedWard,
+    roomBed = roomBed,
+    acuity = acuity,
+    isolation = isolation,
+    triageLevel = triageLevel
+)
+fun StaffMemberDto.toDomain() = StaffMember(id, fullName, runCatching { UserRole.valueOf(role) }.getOrDefault(UserRole.RECEPTIONIST), department)
+fun QueueItemDto.toDomain() = QueueItem(patientId, name, triageLevel, waitMinutes, status, checkedInAt, checkedOutAt)
+fun QueueItem.toDto() = QueueItemDto(patientId, name, triageLevel, waitMinutes, status, checkedInAt, checkedOutAt)
 fun DashboardMetricDto.toDomain() = DashboardMetric(title, value, subtitle)
 fun BottleneckCellDto.toDomain() = BottleneckCell(workflowStage, severity, pendingCount)
 fun TrendPointDto.toDomain() = TrendPoint(label, value)

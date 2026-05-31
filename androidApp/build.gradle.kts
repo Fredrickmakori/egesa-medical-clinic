@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
 }
@@ -18,6 +19,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        multiDexEnabled = true
     }
 
     buildFeatures {
@@ -45,6 +47,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
 dependencies {
@@ -53,4 +61,6 @@ dependencies {
     implementation(compose.foundation)
     implementation(compose.material3)
     implementation(libs.androidx.activity.compose)
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("androidx.multidex:multidex:2.0.1")
 }

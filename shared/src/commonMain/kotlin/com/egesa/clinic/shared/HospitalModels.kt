@@ -2,6 +2,7 @@ package com.egesa.clinic.shared
 
 import com.egesa.clinic.shared.sync.SyncHealthStatus
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 
 import kotlin.jvm.JvmInline
 import kotlinx.serialization.Serializable
@@ -58,15 +59,17 @@ object LegacyCodeMapper {
 enum class Permission {
     // Patient management
     PATIENT_CREATE, PATIENT_READ, PATIENT_UPDATE, PATIENT_DELETE,
+    QUEUE_MANAGE, APPOINTMENT_MANAGE,
 
     // Clinical operations
-    CONSULTATION_WRITE, DIAGNOSIS_WRITE, PRESCRIPTION_WRITE,
+    CONSULTATION_WRITE, DIAGNOSIS_WRITE, PRESCRIPTION_WRITE, LAB_RESULT_MANAGE,
 
     // Ward operations
     WARD_ADMISSION, WARD_DISCHARGE, WARD_TRANSFER,
 
     // Billing/Payment
     PAYMENT_INITIATE, PAYMENT_APPROVE,
+    PHARMACY_DISPENSE, INVENTORY_MANAGE, NOTIFICATION_MANAGE,
 
     // Admin functions
     STAFF_MANAGE, AUDIT_VIEW, SYSTEM_CONFIG
@@ -80,19 +83,25 @@ data class RolePermissionMap(
         val DEFAULTS = mapOf(
             UserRole.RECEPTIONIST to setOf(
                 Permission.PATIENT_CREATE, Permission.PATIENT_READ,
-                Permission.PAYMENT_INITIATE
+                Permission.PAYMENT_INITIATE, Permission.QUEUE_MANAGE,
+                Permission.APPOINTMENT_MANAGE
             ),
             UserRole.DOCTOR to setOf(
                 Permission.PATIENT_READ, Permission.PATIENT_UPDATE,
                 Permission.CONSULTATION_WRITE,
                 Permission.DIAGNOSIS_WRITE, Permission.PRESCRIPTION_WRITE,
+                Permission.LAB_RESULT_MANAGE,
                 Permission.WARD_ADMISSION, Permission.WARD_DISCHARGE,
                 Permission.WARD_TRANSFER
             ),
             UserRole.NURSE to setOf(
                 Permission.PATIENT_READ, Permission.PATIENT_UPDATE,
-                Permission.CONSULTATION_WRITE,
+                Permission.CONSULTATION_WRITE, Permission.LAB_RESULT_MANAGE,
                 Permission.WARD_ADMISSION, Permission.WARD_TRANSFER
+            ),
+            UserRole.PHARMACIST to setOf(
+                Permission.PATIENT_READ,
+                Permission.PHARMACY_DISPENSE, Permission.INVENTORY_MANAGE
             ),
             UserRole.ADMIN to Permission.entries.toSet()
         )
@@ -108,9 +117,15 @@ data class RolePermissionMap(
 enum class WorkflowArea {
     DASHBOARD,
     RECEPTION,
+    APPOINTMENTS,
     CONSULTATION,
     DIAGNOSIS,
+    LAB_IMAGING,
+    PHARMACY,
     WARDS,
+    BILLING,
+    INVENTORY,
+    NOTIFICATIONS,
     ADMIN,
     REPORTS,
     SETTINGS,
@@ -121,6 +136,7 @@ enum class UserRole {
     RECEPTIONIST,
     DOCTOR,
     NURSE,
+    PHARMACIST,
     ADMIN
 }
 
@@ -233,12 +249,34 @@ data class StaffMember(
     val department: String,
 )
 
+data class PatientVisitSummary(
+    val patientId: String,
+    val fullName: String,
+    val age: Int,
+    val sex: Sex,
+    val encounterId: String,
+    val department: String,
+    val visitType: VisitType,
+    val encounterDatetime: String,
+    val syncState: String
+)
+
+data class ServiceIndicatorSummary(
+    val program: String,
+    val indicatorCategory: String,
+    val count: Long,
+    val quantity: Long
+)
+
 @Serializable
 data class QueueItem(
     val patientId: String,
     val name: String,
     val triageLevel: Int,
-    val waitMinutes: Int
+    val waitMinutes: Int,
+    val status: String = "WAITING",
+    val checkedInAt: String? = null,
+    val checkedOutAt: String? = null
 )
 
 @Serializable
@@ -316,10 +354,67 @@ data class WardCensusRow(
 
 class HospitalState {
     private val patients = mutableListOf<Patient>()
+    private val queue = mutableListOf<QueueItem>()
 
     fun allPatients(): List<Patient> = patients.toList()
 
-    fun receptionQueue(): List<QueueItem> = emptyList()
+    fun patientById(id: String): Patient? = patients.find { it.id == id }
+
+    fun registerPatient(patient: Patient): Patient {
+        val index = patients.indexOfFirst { it.id == patient.id }
+        val saved = if (index >= 0) {
+            val existing = patients[index]
+            patient.copy(
+                visits = maxOf(patient.visits, existing.visits),
+                timeline = if (patient.timeline.isEmpty()) existing.timeline else patient.timeline
+            )
+        } else {
+            patient
+        }
+
+        if (index >= 0) patients[index] = saved else patients.add(saved)
+        return saved
+    }
+
+    fun receptionQueue(): List<QueueItem> = queue
+        .filterNot { it.status == "CHECKED_OUT" }
+        .map { it.copy(waitMinutes = waitMinutesSince(it.checkedInAt, it.waitMinutes)) }
+
+    fun checkInPatient(patientId: String, name: String, triageLevel: Int, checkedInAt: String? = null): QueueItem {
+        val now = checkedInAt ?: Clock.System.now().toString()
+        val item = QueueItem(
+            patientId = patientId,
+            name = name,
+            triageLevel = triageLevel.coerceIn(1, 5),
+            waitMinutes = 0,
+            status = "WAITING",
+            checkedInAt = now,
+            checkedOutAt = null
+        )
+        val index = queue.indexOfFirst { it.patientId == patientId && it.status != "CHECKED_OUT" }
+        if (index >= 0) queue[index] = item else queue.add(item)
+        return item
+    }
+
+    fun checkOutPatient(patientId: String): QueueItem? {
+        val index = queue.indexOfLast { it.patientId == patientId && it.status != "CHECKED_OUT" }
+        if (index < 0) return null
+
+        val current = queue[index]
+        val checkedOut = current.copy(
+            waitMinutes = waitMinutesSince(current.checkedInAt, current.waitMinutes),
+            status = "CHECKED_OUT",
+            checkedOutAt = Clock.System.now().toString()
+        )
+        queue[index] = checkedOut
+        return checkedOut
+    }
+
+    private fun waitMinutesSince(checkedInAt: String?, fallback: Int): Int {
+        val startedAt = checkedInAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return fallback
+        val elapsed = Clock.System.now().toEpochMilliseconds() - startedAt.toEpochMilliseconds()
+        return maxOf(fallback, (elapsed / 60_000).toInt())
+    }
 
     fun adminKpis(): List<DashboardMetric> = emptyList()
 
@@ -400,3 +495,36 @@ class HospitalState {
         auditEvents.add(0, event)
     }
 }
+
+@Serializable
+data class Schedule(
+    val id: String,
+    val actorType: String,
+    val actorId: String,
+    val name: String,
+    val active: Boolean
+)
+
+@Serializable
+data class Slot(
+    val id: String,
+    val scheduleId: String,
+    val startTime: String,
+    val endTime: String,
+    val status: String
+)
+
+@Serializable
+data class Appointment(
+    val id: String,
+    val patientId: String,
+    val scheduleId: String,
+    val slotId: String?,
+    val status: String,
+    val appointmentType: String,
+    val reason: String?,
+    val startTime: String,
+    val endTime: String,
+    val createdAt: String,
+    val updatedAt: String
+)

@@ -24,13 +24,14 @@ object FakeRepository {
      * Source of truth for non-production builds is a seeded fixture so login works offline/demo-first.
      * When backend integration is ready, replace with GET /staff and keep this as fallback data.
      */
-    suspend fun getMockStaff(): List<StaffMember> = apiOrFallback({
-        // In the future, this could be: it.getMockStaff()
-        STAFF_MEMBERS
+    suspend fun getStaff(): List<StaffMember> = apiOrFallback({
+        it.getStaff().map { staff -> staff.toDomain() }
     }) {
         delay(300)
         STAFF_MEMBERS
     }
+
+    suspend fun getMockStaff(): List<StaffMember> = getStaff()
 
     fun installClinicApi(api: ClinicApi) {
         clinicApi = api
@@ -73,6 +74,39 @@ object FakeRepository {
     suspend fun getQueue(): List<QueueItem> = apiOrFallback({
         it.getQueue().map { it.toDomain() }
     }) { db.receptionQueue() }
+
+    suspend fun registerPatient(input: PatientRegistrationInput, triageLevel: Int): Result<PatientRegistrationResponseDto> = runResultOrFallback({
+        it.registerPatient(input.toRegistrationDto(triageLevel))
+    }) {
+        val patient = db.registerPatient(
+            Patient(
+                id = input.id,
+                fullName = input.fullName,
+                age = input.age,
+                sex = input.sex,
+                status = input.status,
+                assignedWard = input.assignedWard,
+                roomBed = input.roomBed,
+                acuity = input.acuity,
+                isolation = input.isolation
+            )
+        )
+        val queueItem = db.checkInPatient(patient.id, patient.fullName, triageLevel)
+        PatientRegistrationResponseDto(patient.toDto(), queueItem.toDto())
+    }
+
+    suspend fun checkInPatient(patient: Patient, triageLevel: Int): Result<QueueItem> = runResultOrFallback({
+        it.checkInPatient(QueueCheckInRequestDto(patient.id, patient.fullName, triageLevel)).toDomain()
+    }) {
+        db.registerPatient(patient)
+        db.checkInPatient(patient.id, patient.fullName, triageLevel)
+    }
+
+    suspend fun checkOutPatient(patientId: String): Result<QueueItem> = runResultOrFallback({
+        it.checkOutPatient(patientId).toDomain()
+    }) {
+        db.checkOutPatient(patientId) ?: throw IllegalArgumentException("Patient is not in the active queue")
+    }
 
     suspend fun getKpis(): List<DashboardMetric> = apiOrFallback({
         it.getKpis().map { it.toDomain() }
@@ -123,6 +157,12 @@ object FakeRepository {
         changes.map { SyncResultItem(id = it.id, status = "synced", version = 1) }
     }
 
+    suspend fun uploadClinicalChanges(batch: ClinicalSyncBatchDto): Result<List<SyncResultItem>> = runResultOrFallback({
+        it.uploadClinicalChanges(batch).map { it.toDomain() }
+    }) {
+        fallbackClinicalResults(batch).map { it.toDomain() }
+    }
+
     suspend fun resolveConflict(
         entityId: String,
         localVersion: Int,
@@ -140,13 +180,17 @@ object FakeRepository {
     ): Result<T> {
         val api = clinicApi
         return try {
-            if (useMockFallback || api == null) {
+            if (api == null) {
                 Result.success(fallback())
             } else {
                 Result.success(apiCall(api))
             }
         } catch (e: Exception) {
-            Result.failure(e.toRepositoryException())
+            if (useMockFallback) {
+                runCatching { fallback() }
+            } else {
+                Result.failure(e.toRepositoryException())
+            }
         }
     }
 
@@ -155,10 +199,14 @@ object FakeRepository {
         fallback: suspend () -> T
     ): T {
         val api = clinicApi
-        return if (useMockFallback || api == null) {
+        return if (api == null) {
             fallback()
         } else {
-            apiCall(api)
+            try {
+                apiCall(api)
+            } catch (e: Exception) {
+                if (useMockFallback) fallback() else throw e
+            }
         }
     }
 
@@ -184,15 +232,25 @@ object FakeRepository {
     private suspend fun Throwable.toRepositoryException(): Throwable = this
 }
 
+private fun fallbackClinicalResults(batch: ClinicalSyncBatchDto): List<SyncResultItemDto> = buildList {
+    batch.encounters.forEach { add(SyncResultItemDto(it.encounterId, "queued-local", 0)) }
+    batch.vitalSigns.forEach { add(SyncResultItemDto(it.vitalSignsId, "queued-local", 0)) }
+    batch.diagnoses.forEach { add(SyncResultItemDto(it.diagnosisId, "queued-local", 0)) }
+    batch.medicationOrders.forEach { add(SyncResultItemDto(it.medicationOrderId, "queued-local", 0)) }
+    batch.encounterOutcomes.forEach { add(SyncResultItemDto(it.outcomeId, "queued-local", 0)) }
+    batch.htsEntries.forEach { add(SyncResultItemDto(it.htsId, "queued-local", 0)) }
+    batch.serviceEvents.forEach { add(SyncResultItemDto(it.serviceEventId, "queued-local", 0)) }
+    batch.patientDocuments.forEach { add(SyncResultItemDto(it.documentId, "queued-local", 0)) }
+}
+
 class RepositoryHttpException(statusCode: Int, responseBody: String) : Exception(
     "HTTP $statusCode: ${responseBody.ifBlank { "No response body" }}"
 )
 
 val STAFF_MEMBERS = listOf(
-    StaffMember("DOC-001", "Dr. Aisha Nambala", UserRole.DOCTOR, "General Medicine"),
-    StaffMember("DOC-002", "Dr. Michael Odongo", UserRole.DOCTOR, "Pediatrics"),
-    StaffMember("NRS-001", "Nurse Grace Atieno", UserRole.NURSE, "Maternity Ward"),
-    StaffMember("NRS-002", "Nurse Peter Wekesa", UserRole.NURSE, "Emergency Department"),
-    StaffMember("RCP-001", "Sarah Namutebi", UserRole.RECEPTIONIST, "Front Desk"),
-    StaffMember("ADM-001", "Joseph Kato", UserRole.ADMIN, "Administration")
+    StaffMember("DR-001", "Dr. James Kamau", UserRole.DOCTOR, "General Medicine"),
+    StaffMember("NR-001", "Nurse Faith Wanjiku", UserRole.NURSE, "Emergency Department"),
+    StaffMember("PH-001", "Pharmacist Brian Otieno", UserRole.PHARMACIST, "Pharmacy"),
+    StaffMember("RC-001", "Mary Otieno", UserRole.RECEPTIONIST, "Front Desk"),
+    StaffMember("AD-001", "Admin User", UserRole.ADMIN, "Administration")
 )

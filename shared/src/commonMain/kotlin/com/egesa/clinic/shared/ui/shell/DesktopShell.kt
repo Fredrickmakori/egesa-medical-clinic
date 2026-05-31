@@ -23,7 +23,6 @@ import com.egesa.clinic.shared.ui.components.Avatar
 import com.egesa.clinic.shared.ui.components.RoleBadge
 import com.egesa.clinic.shared.ui.navigation.ClinicNavItem
 import com.egesa.clinic.shared.ui.navigation.SessionState
-import com.egesa.clinic.shared.ui.navigation.initials
 import com.egesa.clinic.shared.ui.navigation.navItemsFor
 import com.egesa.clinic.shared.ui.screens.AreaScreen
 import com.egesa.clinic.shared.ui.theme.*

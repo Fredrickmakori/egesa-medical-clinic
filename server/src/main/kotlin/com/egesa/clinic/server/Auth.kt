@@ -37,10 +37,13 @@ object AuthStore {
         AuthUser("AD-001", "Admin User", UserRole.ADMIN, "8357"),
         AuthUser("DR-001", "Dr. James Kamau", UserRole.DOCTOR, "2211"),
         AuthUser("NR-001", "Nurse Faith Wanjiku", UserRole.NURSE, "1144"),
+        AuthUser("PH-001", "Pharmacist Brian Otieno", UserRole.PHARMACIST, "6677"),
         AuthUser("RC-001", "Mary Otieno", UserRole.RECEPTIONIST, "9911")
     ).associateBy { it.id }
 
     fun verify(staffId: String, pin: String): AuthUser? = users[staffId]?.takeIf { it.pin == pin }
+
+    fun staffDirectory(): List<AuthUser> = users.values.sortedBy { it.name }
 }
 
 object JwtConfig {

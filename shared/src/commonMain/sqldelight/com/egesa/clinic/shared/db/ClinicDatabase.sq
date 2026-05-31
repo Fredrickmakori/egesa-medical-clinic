@@ -24,6 +24,18 @@ CREATE TABLE PatientEntity (
   syncedAt TEXT
 );
 
+CREATE TABLE ServiceEventEntity (
+  service_event_id TEXT PRIMARY KEY NOT NULL,
+  encounter_id TEXT NOT NULL,
+  program TEXT NOT NULL,
+  indicator_category TEXT NOT NULL,
+  service_code TEXT,
+  value_text TEXT,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  event_datetime TEXT NOT NULL,
+  sync_state TEXT NOT NULL DEFAULT 'LOCAL_ONLY'
+);
+
 -- Generic encounter core
 CREATE TABLE EncounterEntity (
   encounter_id TEXT PRIMARY KEY NOT NULL,
@@ -38,7 +50,7 @@ CREATE TABLE EncounterEntity (
 
 CREATE TABLE VitalSignsEntity (
   vital_signs_id TEXT PRIMARY KEY NOT NULL,
-  encounter_id TEXT NOT NULL UNIQUE,
+  encounter_id TEXT NOT NULL,
   weight_kg REAL,
   height_cm REAL,
   bmi REAL,
@@ -50,6 +62,21 @@ CREATE TABLE VitalSignsEntity (
   spo2_percent REAL,
   muac_cm REAL,
   recorded_at TEXT NOT NULL
+);
+
+CREATE TABLE PatientDocumentEntity (
+  document_id TEXT PRIMARY KEY NOT NULL,
+  patient_id TEXT NOT NULL,
+  document_type TEXT NOT NULL,
+  image_uri TEXT NOT NULL,
+  verification_status TEXT NOT NULL,
+  extracted_full_name TEXT,
+  extracted_identifier TEXT,
+  extracted_birth_date TEXT,
+  extracted_sex TEXT,
+  extracted_guardian_name TEXT,
+  notes TEXT,
+  captured_at TEXT NOT NULL
 );
 
 CREATE TABLE DiagnosisEntity (
@@ -236,8 +263,43 @@ VALUES (?, ?, ?, ?, ?, ?, ?, 'LOCAL_ONLY');
 selectEncountersByPatient:
 SELECT * FROM EncounterEntity WHERE patient_id = ? ORDER BY encounter_datetime DESC;
 
+selectActiveVisitSummaries:
+SELECT
+  p.id AS patient_id,
+  p.fullName AS full_name,
+  p.age AS age,
+  p.sex AS sex,
+  e.encounter_id AS encounter_id,
+  e.department AS department,
+  e.visit_type AS visit_type,
+  e.encounter_datetime AS encounter_datetime,
+  e.sync_state AS sync_state
+FROM EncounterEntity e
+JOIN PatientEntity p ON p.id = e.patient_id
+ORDER BY e.encounter_datetime DESC;
+
 deleteEncounter:
 DELETE FROM EncounterEntity WHERE encounter_id = ?;
+
+insertServiceEvent:
+INSERT OR REPLACE INTO ServiceEventEntity(
+  service_event_id, encounter_id, program, indicator_category, service_code,
+  value_text, quantity, event_datetime, sync_state
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL_ONLY');
+
+selectServiceEventsByEncounter:
+SELECT * FROM ServiceEventEntity WHERE encounter_id = ? ORDER BY event_datetime DESC;
+
+getServiceIndicatorSummary:
+SELECT
+  program,
+  indicator_category,
+  COUNT(*) AS count,
+  SUM(quantity) AS quantity
+FROM ServiceEventEntity
+WHERE event_datetime BETWEEN ? AND ?
+GROUP BY program, indicator_category
+ORDER BY program, indicator_category;
 
 insertVitalSigns:
 INSERT OR REPLACE INTO VitalSignsEntity(vital_signs_id, encounter_id, weight_kg, height_cm, bmi, temperature_c, systolic_bp, diastolic_bp, pulse_bpm, respiratory_rate, spo2_percent, muac_cm, recorded_at)
@@ -245,6 +307,16 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectVitalSignsByEncounter:
 SELECT * FROM VitalSignsEntity WHERE encounter_id = ?;
+
+insertPatientDocument:
+INSERT OR REPLACE INTO PatientDocumentEntity(
+  document_id, patient_id, document_type, image_uri, verification_status,
+  extracted_full_name, extracted_identifier, extracted_birth_date, extracted_sex,
+  extracted_guardian_name, notes, captured_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectDocumentsByPatient:
+SELECT * FROM PatientDocumentEntity WHERE patient_id = ? ORDER BY captured_at DESC;
 
 insertDiagnosis:
 INSERT OR REPLACE INTO DiagnosisEntity(diagnosis_id, encounter_id, diagnosis_text, is_primary, code_system, diagnosis_code)
@@ -321,3 +393,66 @@ FROM HtsRegisterEntity h
 JOIN EncounterEntity e ON h.encounter_id = e.encounter_id
 JOIN PatientEntity p ON e.patient_id = p.id
 WHERE e.encounter_datetime BETWEEN ? AND ?;
+
+-- Scheduling & Calendar Tables
+CREATE TABLE ScheduleEntity (
+  id TEXT PRIMARY KEY NOT NULL,
+  actor_type TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE SlotEntity (
+  id TEXT PRIMARY KEY NOT NULL,
+  schedule_id TEXT NOT NULL,
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'free'
+);
+
+CREATE TABLE AppointmentEntity (
+  id TEXT PRIMARY KEY NOT NULL,
+  patient_id TEXT NOT NULL,
+  schedule_id TEXT NOT NULL,
+  slot_id TEXT,
+  status TEXT NOT NULL DEFAULT 'booked',
+  appointment_type TEXT NOT NULL,
+  reason TEXT,
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Scheduling Queries
+selectAllSchedules:
+SELECT * FROM ScheduleEntity;
+
+insertSchedule:
+INSERT OR REPLACE INTO ScheduleEntity(id, actor_type, actor_id, name, active)
+VALUES (?, ?, ?, ?, ?);
+
+selectSlotsBySchedule:
+SELECT * FROM SlotEntity WHERE schedule_id = ? ORDER BY start_time ASC;
+
+insertSlot:
+INSERT OR REPLACE INTO SlotEntity(id, schedule_id, start_time, end_time, status)
+VALUES (?, ?, ?, ?, ?);
+
+updateSlotStatus:
+UPDATE SlotEntity SET status = ? WHERE id = ?;
+
+selectAppointmentsByPatient:
+SELECT * FROM AppointmentEntity WHERE patient_id = ? ORDER BY start_time DESC;
+
+selectAppointmentsBySchedule:
+SELECT * FROM AppointmentEntity WHERE schedule_id = ? ORDER BY start_time ASC;
+
+insertAppointment:
+INSERT OR REPLACE INTO AppointmentEntity(id, patient_id, schedule_id, slot_id, status, appointment_type, reason, start_time, end_time, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+checkOverlappingAppointments:
+SELECT COUNT(*) FROM AppointmentEntity 
+WHERE schedule_id = ? AND status = 'booked' AND start_time < ? AND end_time > ?;

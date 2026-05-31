@@ -4,6 +4,7 @@ import com.egesa.clinic.shared.*
 import com.egesa.clinic.shared.db.ClinicDatabase
 import app.cash.sqldelight.async.coroutines.awaitAsList
 import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
+import app.cash.sqldelight.async.coroutines.awaitAsOne
 import kotlinx.datetime.Clock
 
 data class EncounterInput(
@@ -434,6 +435,122 @@ class LocalRepository(database: ClinicDatabase) {
 
     suspend fun deleteSyncItem(id: String) {
         dbQueries.deleteSyncItem(id = id)
+    }
+
+    suspend fun getAllSchedules(): List<Schedule> {
+        return dbQueries.selectAllSchedules().awaitAsList().map {
+            Schedule(
+                id = it.id,
+                actorType = it.actor_type,
+                actorId = it.actor_id,
+                name = it.name,
+                active = it.active == 1L
+            )
+        }
+    }
+
+    suspend fun insertSchedule(schedule: Schedule) {
+        dbQueries.insertSchedule(
+            id = schedule.id,
+            actor_type = schedule.actorType,
+            actor_id = schedule.actorId,
+            name = schedule.name,
+            active = if (schedule.active) 1L else 0L
+        )
+        val payload = """{"id":"${schedule.id}","actor_type":"${schedule.actorType}","actor_id":"${schedule.actorId}","name":"${schedule.name}","active":${schedule.active}}"""
+        queueSync("ScheduleEntity", schedule.id, "UPSERT", payload)
+    }
+
+    suspend fun getSlotsBySchedule(scheduleId: String): List<Slot> {
+        return dbQueries.selectSlotsBySchedule(scheduleId).awaitAsList().map {
+            Slot(
+                id = it.id,
+                scheduleId = it.schedule_id,
+                startTime = it.start_time,
+                endTime = it.end_time,
+                status = it.status
+            )
+        }
+    }
+
+    suspend fun insertSlot(slot: Slot) {
+        dbQueries.insertSlot(
+            id = slot.id,
+            schedule_id = slot.scheduleId,
+            start_time = slot.startTime,
+            end_time = slot.endTime,
+            status = slot.status
+        )
+        val payload = """{"id":"${slot.id}","schedule_id":"${slot.scheduleId}","start_time":"${slot.startTime}","end_time":"${slot.endTime}","status":"${slot.status}"}"""
+        queueSync("SlotEntity", slot.id, "UPSERT", payload)
+    }
+
+    suspend fun updateSlotStatus(slotId: String, status: String) {
+        dbQueries.updateSlotStatus(status = status, id = slotId)
+        val payload = """{"status":"$status"}"""
+        queueSync("SlotEntity", slotId, "UPDATE_STATUS", payload)
+    }
+
+    suspend fun getAppointmentsByPatient(patientId: String): List<Appointment> {
+        return dbQueries.selectAppointmentsByPatient(patientId).awaitAsList().map {
+            Appointment(
+                id = it.id,
+                patientId = it.patient_id,
+                scheduleId = it.schedule_id,
+                slotId = it.slot_id,
+                status = it.status,
+                appointmentType = it.appointment_type,
+                reason = it.reason,
+                startTime = it.start_time,
+                endTime = it.end_time,
+                createdAt = it.created_at,
+                updatedAt = it.updated_at
+            )
+        }
+    }
+
+    suspend fun getAppointmentsBySchedule(scheduleId: String): List<Appointment> {
+        return dbQueries.selectAppointmentsBySchedule(scheduleId).awaitAsList().map {
+            Appointment(
+                id = it.id,
+                patientId = it.patient_id,
+                scheduleId = it.schedule_id,
+                slotId = it.slot_id,
+                status = it.status,
+                appointmentType = it.appointment_type,
+                reason = it.reason,
+                startTime = it.start_time,
+                endTime = it.end_time,
+                createdAt = it.created_at,
+                updatedAt = it.updated_at
+            )
+        }
+    }
+
+    suspend fun insertAppointment(appointment: Appointment) {
+        dbQueries.insertAppointment(
+            id = appointment.id,
+            patient_id = appointment.patientId,
+            schedule_id = appointment.scheduleId,
+            slot_id = appointment.slotId,
+            status = appointment.status,
+            appointment_type = appointment.appointmentType,
+            reason = appointment.reason,
+            start_time = appointment.startTime,
+            end_time = appointment.endTime,
+            created_at = appointment.createdAt,
+            updated_at = appointment.updatedAt
+        )
+        val payload = """{"id":"${appointment.id}","patient_id":"${appointment.patientId}","schedule_id":"${appointment.scheduleId}","slot_id":${appointment.slotId?.let { "\"$it\"" } ?: "null"},"status":"${appointment.status}","appointment_type":"${appointment.appointmentType}","reason":${appointment.reason?.let { "\"$it\"" } ?: "null"},"start_time":"${appointment.startTime}","end_time":"${appointment.endTime}","created_at":"${appointment.createdAt}","updated_at":"${appointment.updatedAt}"}"""
+        queueSync("AppointmentEntity", appointment.id, "UPSERT", payload)
+    }
+
+    suspend fun checkOverlappingAppointments(scheduleId: String, startTime: String, endTime: String): Boolean {
+        return dbQueries.checkOverlappingAppointments(
+            schedule_id = scheduleId,
+            start_time = endTime,
+            end_time = startTime
+        ).awaitAsOne() > 0L
     }
 
     suspend fun seedAdminIfEmpty() {

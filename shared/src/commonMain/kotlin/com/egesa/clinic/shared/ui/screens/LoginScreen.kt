@@ -49,18 +49,41 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
     var loadingStaff by remember { mutableStateOf(true) }
     var staffLoadError by remember { mutableStateOf<String?>(null) }
     var reloadToken by remember { mutableStateOf(0) }
+    var manualMode by remember { mutableStateOf(false) }
 
     LaunchedEffect(reloadToken) {
         loadingStaff = true
         staffLoadError = null
         try {
+            val apiStaff = FakeRepository.getStaff()
             val localStaff = localRepository.getAllStaff()
-            allStaff = localStaff.ifEmpty { FakeRepository.getMockStaff() }
+            allStaff = (apiStaff + localStaff).distinctBy { it.id }
         } catch (_: Exception) {
-            allStaff = emptyList()
-            staffLoadError = "Unable to load staff list. Please retry or check connectivity."
+            allStaff = runCatching { localRepository.getAllStaff() }.getOrDefault(emptyList())
+            if (allStaff.isEmpty()) {
+                staffLoadError = "Unable to load staff. Enter your Staff ID or retry."
+                manualMode = true
+            } else {
+                staffLoadError = "Using saved staff profiles. API staff directory is unavailable."
+            }
         } finally {
             loadingStaff = false
+        }
+    }
+
+    val continueWithManualStaffId = {
+        val staffId = manualStaffId.trim()
+        if (staffId.isBlank()) {
+            error = "Enter your Staff ID"
+        } else {
+            picked = StaffMember(
+                id = staffId,
+                fullName = staffId,
+                role = UserRole.RECEPTIONIST,
+                department = "Manual sign in"
+            )
+            pin = ""
+            error = null
         }
     }
 
@@ -77,7 +100,7 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                     try {
                         val result = FakeRepository.login(staff.id, pin)
                         val response = result.getOrElse {
-                            error = "Invalid credentials"
+                            error = it.message?.takeIf { message -> message.isNotBlank() } ?: "Invalid credentials"
                             return@launch
                         }
                         onLogin(
@@ -107,25 +130,13 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (picked == null) {
-                    if (allStaff.isEmpty() && !loadingStaff) {
+                    if (manualMode || (allStaff.isEmpty() && !loadingStaff)) {
                         ManualStaffIdEntry(
                             staffId = manualStaffId,
                             error = staffLoadError,
                             onStaffIdChange = { manualStaffId = it },
-                            onContinue = {
-                                if (manualStaffId.isBlank()) {
-                                    error = "Enter your Staff ID"
-                                } else {
-                                    picked = StaffMember(
-                                        id = manualStaffId.trim(),
-                                        fullName = manualStaffId.trim(),
-                                        role = UserRole.RECEPTIONIST,
-                                        department = ""
-                                    )
-                                    pin = ""
-                                    error = null
-                                }
-                            },
+                            onContinue = continueWithManualStaffId,
+                            onUseStaffList = if (allStaff.isNotEmpty()) {{ manualMode = false; error = null }} else null,
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
@@ -134,6 +145,7 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                             loading = loadingStaff,
                             loadError = staffLoadError,
                             onRetry = { reloadToken += 1 },
+                            onManualEntry = { manualMode = true; error = null },
                             onPick = { picked = it; pin = ""; error = null },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -159,25 +171,13 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f).fillMaxHeight().padding(16.dp), contentAlignment = Alignment.Center) {
                         if (picked == null) {
-                            if (allStaff.isEmpty() && !loadingStaff) {
+                            if (manualMode || (allStaff.isEmpty() && !loadingStaff)) {
                                 ManualStaffIdEntry(
                                     staffId = manualStaffId,
                                     error = staffLoadError,
                                     onStaffIdChange = { manualStaffId = it },
-                                    onContinue = {
-                                        if (manualStaffId.isBlank()) {
-                                            error = "Enter your Staff ID"
-                                        } else {
-                                            picked = StaffMember(
-                                                id = manualStaffId.trim(),
-                                                fullName = manualStaffId.trim(),
-                                                role = UserRole.RECEPTIONIST,
-                                                department = ""
-                                            )
-                                            pin = ""
-                                            error = null
-                                        }
-                                    },
+                                    onContinue = continueWithManualStaffId,
+                                    onUseStaffList = if (allStaff.isNotEmpty()) {{ manualMode = false; error = null }} else null,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             } else {
@@ -186,6 +186,7 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                                     loading = loadingStaff,
                                     loadError = staffLoadError,
                                     onRetry = { reloadToken += 1 },
+                                    onManualEntry = { manualMode = true; error = null },
                                     onPick = { picked = it; pin = ""; error = null },
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -253,25 +254,13 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                         contentAlignment = Alignment.Center,
                     ) {
                         if (picked == null) {
-                            if (allStaff.isEmpty() && !loadingStaff) {
+                            if (manualMode || (allStaff.isEmpty() && !loadingStaff)) {
                                 ManualStaffIdEntry(
                                     staffId = manualStaffId,
                                     error = staffLoadError,
                                     onStaffIdChange = { manualStaffId = it },
-                                    onContinue = {
-                                        if (manualStaffId.isBlank()) {
-                                            error = "Enter your Staff ID"
-                                        } else {
-                                            picked = StaffMember(
-                                                id = manualStaffId.trim(),
-                                                fullName = manualStaffId.trim(),
-                                                role = UserRole.RECEPTIONIST,
-                                                department = ""
-                                            )
-                                            pin = ""
-                                            error = null
-                                        }
-                                    },
+                                    onContinue = continueWithManualStaffId,
+                                    onUseStaffList = if (allStaff.isNotEmpty()) {{ manualMode = false; error = null }} else null,
                                     modifier = Modifier.width(400.dp)
                                 )
                             } else {
@@ -280,6 +269,7 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                                     loading = loadingStaff,
                                     loadError = staffLoadError,
                                     onRetry = { reloadToken += 1 },
+                                    onManualEntry = { manualMode = true; error = null },
                                     onPick = { picked = it; pin = ""; error = null },
                                 )
                             }
@@ -310,11 +300,15 @@ private fun ManualStaffIdEntry(
     error: String?,
     onStaffIdChange: (String) -> Unit,
     onContinue: () -> Unit,
+    onUseStaffList: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier.clip(RoundedCornerShape(12.dp)).background(Navy950).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Text("Sign in", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = White)
-        Text("Enter your Staff ID to continue", fontSize = 13.sp, color = Navy200)
+        Text("Enter the Staff ID issued by the clinic.", fontSize = 13.sp, color = Navy200)
 
         OutlinedTextField(
             value = staffId,
@@ -346,6 +340,12 @@ private fun ManualStaffIdEntry(
         ) {
             Text("Continue", fontWeight = FontWeight.Bold)
         }
+
+        if (onUseStaffList != null) {
+            TextButton(onClick = onUseStaffList, modifier = Modifier.fillMaxWidth()) {
+                Text("Choose from staff list", color = Navy200, fontSize = 12.sp)
+            }
+        }
     }
 }
 
@@ -355,6 +355,7 @@ private fun StaffSelector(
     loading: Boolean,
     loadError: String?,
     onRetry: () -> Unit,
+    onManualEntry: () -> Unit,
     onPick: (StaffMember) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -373,7 +374,7 @@ private fun StaffSelector(
         // Header
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Welcome back", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = White)
-            Text("Select your profile to continue", fontSize = 13.sp, color = Navy200)
+            Text("Select your profile or enter a Staff ID.", fontSize = 13.sp, color = Navy200)
         }
 
         // Search field
@@ -400,6 +401,10 @@ private fun StaffSelector(
                     modifier = Modifier.padding(end = 4.dp).clickable { query = "" })
             }} else null,
         )
+
+        TextButton(onClick = onManualEntry, modifier = Modifier.align(Alignment.End)) {
+            Text("Enter Staff ID manually", color = Navy200, fontSize = 12.sp)
+        }
 
         // Staff list
         if (loading) {
@@ -438,7 +443,7 @@ private fun StaffSelector(
             ) {
                 // Group by role
                 val grouped = filtered.groupBy { it.role }
-                listOf(UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTIONIST, UserRole.ADMIN)
+                listOf(UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST, UserRole.RECEPTIONIST, UserRole.ADMIN)
                     .forEach { role ->
                         val group = grouped[role] ?: return@forEach
                         item {
@@ -468,6 +473,7 @@ private fun MobileStaffSelector(
     loading: Boolean,
     loadError: String?,
     onRetry: () -> Unit,
+    onManualEntry: () -> Unit,
     onPick: (StaffMember) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -486,7 +492,7 @@ private fun MobileStaffSelector(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Welcome", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White)
-            Text("Select profile", fontSize = 12.sp, color = Navy200)
+            Text("Select profile or enter Staff ID", fontSize = 12.sp, color = Navy200)
         }
 
         OutlinedTextField(
@@ -506,6 +512,10 @@ private fun MobileStaffSelector(
                 cursorColor             = Teal500,
             ),
         )
+
+        TextButton(onClick = onManualEntry, modifier = Modifier.align(Alignment.End)) {
+            Text("Enter Staff ID", color = Navy200, fontSize = 12.sp)
+        }
 
         if (loading) {
             Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
@@ -533,7 +543,7 @@ private fun MobileStaffSelector(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 val grouped = filtered.groupBy { it.role }
-                listOf(UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTIONIST, UserRole.ADMIN)
+                listOf(UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST, UserRole.RECEPTIONIST, UserRole.ADMIN)
                     .forEach { role ->
                         val group = grouped[role] ?: return@forEach
                         item {

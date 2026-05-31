@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,9 +19,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.UserRole
@@ -157,6 +158,7 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                         error      = error,
                         validating = validating,
                         onDigit    = { if (pin.length < 6) { pin += it; error = null } },
+                        onPinChange = { pin = it.onlyPinDigits(); error = null },
                         onBack     = { pin = pin.dropLastOrEmpty() },
                         onCancel   = { picked = null; pin = ""; error = null },
                         onSubmit   = handleSubmit,
@@ -201,6 +203,7 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                                 error      = error,
                                 validating = validating,
                                 onDigit    = { if (pin.length < 6) { pin += it; error = null } },
+                                onPinChange = { pin = it.onlyPinDigits(); error = null },
                                 onBack     = { pin = pin.dropLastOrEmpty() },
                                 onCancel   = { picked = null; pin = ""; error = null },
                                 onSubmit   = handleSubmit,
@@ -279,7 +282,7 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                                 pin        = pin,
                                 error      = error,
                                 validating = validating,
-                                onDigit    = { if (pin.length < 6) { pin += it; error = null } },
+                                onPinChange = { pin = it.onlyPinDigits(); error = null },
                                 onBack     = { pin = pin.dropLastOrEmpty() },
                                 onCancel   = { picked = null; pin = ""; error = null },
                                 onSubmit   = handleSubmit,
@@ -625,14 +628,13 @@ private fun StaffRow(staff: StaffMember, onClick: () -> Unit) {
 
 // ── Desktop PIN Entry (Keyboard Support) ──────────────────────────────────
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun DesktopPinEntry(
     staff: StaffMember,
     pin: String,
     error: String?,
     validating: Boolean,
-    onDigit: (String) -> Unit,
+    onPinChange: (String) -> Unit,
     onBack: () -> Unit,
     onCancel: () -> Unit,
     onSubmit: () -> Unit,
@@ -666,32 +668,29 @@ private fun DesktopPinEntry(
             }
         }
 
-        // PIN input field with keyboard support
-        KeyboardAwarePinEntry(
+        OutlinedTextField(
+            value = pin,
+            onValueChange = onPinChange,
             modifier = Modifier.fillMaxWidth(),
-            onDigitPressed = onDigit,
-            onBackspace = onBack,
-            onSubmit = onSubmit,
-        ) {
-            OutlinedTextField(
-                value = pin,
-                onValueChange = { },  // Controlled by keyboard events
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Enter PIN…", fontSize = 13.sp, color = Navy200) },
-                singleLine = true,
-                readOnly = true,
-                visualTransformation = PasswordVisualTransformation(),
-                shape = RoundedCornerShape(8.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SidebarActive,
-                    unfocusedContainerColor = SidebarActive,
-                    focusedBorderColor = Teal500,
-                    unfocusedBorderColor = SidebarBorder,
-                    focusedTextColor = White,
-                    unfocusedTextColor = White,
-                ),
-            )
-        }
+            placeholder = { Text("Enter PIN...", fontSize = 13.sp, color = Navy200) },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.NumberPassword,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { onSubmit() }),
+            shape = RoundedCornerShape(8.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = SidebarActive,
+                unfocusedContainerColor = SidebarActive,
+                focusedBorderColor = Teal500,
+                unfocusedBorderColor = SidebarBorder,
+                focusedTextColor = White,
+                unfocusedTextColor = White,
+                cursorColor = Teal500,
+            ),
+        )
 
         // PIN dot display
         Row(
@@ -755,6 +754,7 @@ private fun MobilePinEntry(
     error: String?,
     validating: Boolean,
     onDigit: (String) -> Unit,
+    onPinChange: (String) -> Unit,
     onBack: () -> Unit,
     onCancel: () -> Unit,
     onSubmit: () -> Unit,
@@ -794,12 +794,16 @@ private fun MobilePinEntry(
         // PIN Input with visibility toggle
         OutlinedTextField(
             value = pin,
-            onValueChange = { },
+            onValueChange = onPinChange,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Enter PIN…", fontSize = 12.sp, color = Navy200) },
+            placeholder = { Text("Enter PIN...", fontSize = 12.sp, color = Navy200) },
             singleLine = true,
-            readOnly = true,
             visualTransformation = if (showPin) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.NumberPassword,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { onSubmit() }),
             trailingIcon = {
                 TextButton(onClick = { showPin = !showPin }) {
                     Text(
@@ -895,3 +899,5 @@ private fun MobilePinEntry(
 }
 
 private fun String.dropLastOrEmpty() = if (isEmpty()) this else dropLast(1)
+
+private fun String.onlyPinDigits(): String = filter { it.isDigit() }.take(6)

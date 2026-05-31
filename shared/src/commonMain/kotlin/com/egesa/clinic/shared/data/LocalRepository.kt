@@ -135,8 +135,25 @@ data class ServiceEventInput(
 
 data class PatientChart(
     val patient: Patient,
-    val encounters: List<EncounterDto> = emptyList(),
+    val encounters: List<PatientChartEncounter> = emptyList(),
     val documents: List<PatientDocumentDto> = emptyList()
+)
+
+data class PatientChartEncounter(
+    val encounterId: String,
+    val patientId: String,
+    val encounterDatetime: String,
+    val department: String,
+    val visitType: VisitType,
+    val providerId: String? = null,
+    val facilityId: String,
+    val syncState: String = "LOCAL_ONLY",
+    val vitals: List<String> = emptyList(),
+    val diagnoses: List<String> = emptyList(),
+    val medications: List<String> = emptyList(),
+    val serviceEvents: List<String> = emptyList(),
+    val outcome: String? = null,
+    val referralTo: String? = null
 )
 
 data class MohHtsTally(
@@ -221,18 +238,41 @@ class LocalRepository(database: ClinicDatabase) {
         return PatientChart(
             patient = patient,
             encounters = dbQueries.selectEncountersByPatient(patient_id = patientId).awaitAsList().map {
-                EncounterDto(
+                val vitals = dbQueries.selectVitalSignsByEncounter(encounter_id = it.encounter_id).awaitAsList().flatMap { vital ->
+                    listOfNotNull(
+                        vital.weight_kg?.let { value -> "Weight ${value}kg" },
+                        vital.height_cm?.let { value -> "Height ${value}cm" },
+                        vital.bmi?.let { value -> "BMI $value" },
+                        vital.temperature_c?.let { value -> "Temp ${value}C" },
+                        vital.systolic_bp?.let { systolic -> "BP $systolic/${vital.diastolic_bp ?: "-"}" },
+                        vital.pulse_bpm?.let { value -> "Pulse $value bpm" },
+                        vital.respiratory_rate?.let { value -> "RR $value" },
+                        vital.spo2_percent?.let { value -> "SpO2 $value%" },
+                        vital.muac_cm?.let { value -> "MUAC ${value}cm" }
+                    )
+                }
+                val outcome = dbQueries.selectEncounterOutcome(encounter_id = it.encounter_id).awaitAsOneOrNull()
+                PatientChartEncounter(
                     encounterId = it.encounter_id,
                     patientId = it.patient_id,
                     encounterDatetime = it.encounter_datetime,
                     department = it.department,
-                    visitType = it.visit_type,
+                    visitType = LegacyCodeMapper.visitType(it.visit_type),
                     providerId = it.provider_id,
                     facilityId = it.facility_id,
-                    syncState = it.sync_state
+                    syncState = it.sync_state,
+                    vitals = vitals,
+                    diagnoses = dbQueries.selectDiagnosisByEncounter(encounter_id = it.encounter_id).awaitAsList()
+                        .map { diagnosis -> diagnosis.diagnosis_text },
+                    medications = dbQueries.selectMedicationOrdersByEncounter(encounter_id = it.encounter_id).awaitAsList()
+                        .map { medication -> listOfNotNull(medication.medication_name, medication.dose, medication.frequency).joinToString(" ") },
+                    serviceEvents = dbQueries.selectServiceEventsByEncounter(encounter_id = it.encounter_id).awaitAsList()
+                        .map { event -> listOfNotNull(event.program, event.indicator_category, event.value_text).joinToString(" - ") },
+                    outcome = outcome?.disposition,
+                    referralTo = outcome?.referral_to
                 )
             },
-            documents = dbQueries.selectPatientDocuments(patient_id = patientId).awaitAsList().map {
+            documents = dbQueries.selectDocumentsByPatient(patient_id = patientId).awaitAsList().map {
                 PatientDocumentDto(
                     documentId = it.document_id,
                     patientId = it.patient_id,
@@ -250,6 +290,31 @@ class LocalRepository(database: ClinicDatabase) {
             }
         )
     }
+
+    suspend fun getActiveVisitSummaries(): List<PatientVisitSummary> =
+        dbQueries.selectActiveVisitSummaries().awaitAsList().map {
+            PatientVisitSummary(
+                patientId = it.patient_id,
+                fullName = it.full_name,
+                age = it.age.toInt(),
+                sex = LegacyCodeMapper.sex(it.sex),
+                encounterId = it.encounter_id,
+                department = it.department,
+                visitType = LegacyCodeMapper.visitType(it.visit_type),
+                encounterDatetime = it.encounter_datetime,
+                syncState = it.sync_state
+            )
+        }
+
+    suspend fun getServiceIndicatorSummary(startDate: String, endDate: String): List<ServiceIndicatorSummary> =
+        dbQueries.getServiceIndicatorSummary(startDate, endDate).awaitAsList().map {
+            ServiceIndicatorSummary(
+                program = it.program,
+                indicatorCategory = it.indicator_category,
+                count = it.count,
+                quantity = it.quantity ?: 0L
+            )
+        }
 
     suspend fun createEncounter(input: EncounterInput) {
         dbQueries.insertEncounter(

@@ -16,7 +16,7 @@ data class SyncHealth(
     val pendingItems: Int = 0,
     val failedItems: Int = 0,
     val lastError: String? = null,
-    val lastSyncedAt: String? = null
+    val lastSyncedAt: String? = null,
 )
 
 /**

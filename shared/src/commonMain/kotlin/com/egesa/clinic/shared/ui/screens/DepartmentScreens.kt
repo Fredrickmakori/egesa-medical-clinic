@@ -60,7 +60,7 @@ fun ClinicalProgramsScreen(localRepository: LocalRepository, session: SessionSta
         Text(
             "Every saved record creates a visit, service event, and pending sync item.",
             style = MaterialTheme.typography.bodySmall,
-            color = Slate500
+            color = Slate500,
         )
         Spacer(Modifier.height(12.dp))
         TabRow(selectedTabIndex = tab) {
@@ -189,7 +189,7 @@ fun HtsForm(localRepository: LocalRepository, session: SessionState) {
                 }
                 OutlinedTextField(fullName, { fullName = it }, label = { Text("Patient full name") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(sex, { sex = it }, label = { Text("Sex") }, modifier = Modifier.fillMaxWidth())
-                HtsRegisterRow(entry = entry, onUpdate = { entry = it })
+                HtsRegisterRow(entry = entry) { entry = it }
 
                 Button(
                     onClick = {

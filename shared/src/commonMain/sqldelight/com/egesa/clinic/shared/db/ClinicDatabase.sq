@@ -108,33 +108,6 @@ CREATE TABLE EncounterOutcomeEntity (
   discharge_notes TEXT
 );
 
-CREATE TABLE ServiceEventEntity (
-  service_event_id TEXT PRIMARY KEY NOT NULL,
-  encounter_id TEXT NOT NULL,
-  program TEXT NOT NULL,
-  indicator_category TEXT NOT NULL,
-  service_code TEXT,
-  value_text TEXT,
-  quantity INTEGER NOT NULL DEFAULT 1,
-  event_datetime TEXT NOT NULL,
-  sync_state TEXT NOT NULL DEFAULT 'LOCAL_ONLY'
-);
-
-CREATE TABLE PatientDocumentEntity (
-  document_id TEXT PRIMARY KEY NOT NULL,
-  patient_id TEXT NOT NULL,
-  document_type TEXT NOT NULL,
-  image_uri TEXT NOT NULL,
-  verification_status TEXT NOT NULL,
-  extracted_full_name TEXT,
-  extracted_identifier TEXT,
-  extracted_birth_date TEXT,
-  extracted_sex TEXT,
-  extracted_guardian_name TEXT,
-  notes TEXT,
-  captured_at TEXT NOT NULL
-);
-
 -- Program extension tables
 CREATE TABLE OpdVisitEntity (
   opd_id TEXT PRIMARY KEY NOT NULL,
@@ -285,7 +258,7 @@ insertServiceEvent:
 INSERT OR REPLACE INTO ServiceEventEntity(
   service_event_id, encounter_id, program, indicator_category, service_code,
   value_text, quantity, event_datetime, sync_state
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL_ONLY');
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectServiceEventsByEncounter:
 SELECT * FROM ServiceEventEntity WHERE encounter_id = ? ORDER BY event_datetime DESC;
@@ -338,29 +311,6 @@ VALUES (?, ?, ?, ?, ?, ?);
 
 selectEncounterOutcome:
 SELECT * FROM EncounterOutcomeEntity WHERE encounter_id = ?;
-
-insertServiceEvent:
-INSERT OR REPLACE INTO ServiceEventEntity(
-  service_event_id, encounter_id, program, indicator_category, service_code,
-  value_text, quantity, event_datetime, sync_state
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-
-getServiceIndicatorSummary:
-SELECT program, indicator_category, COUNT(*) AS count, SUM(quantity) AS quantity
-FROM ServiceEventEntity
-WHERE event_datetime BETWEEN ? AND ?
-GROUP BY program, indicator_category
-ORDER BY program, indicator_category;
-
-insertPatientDocument:
-INSERT OR REPLACE INTO PatientDocumentEntity(
-  document_id, patient_id, document_type, image_uri, verification_status,
-  extracted_full_name, extracted_identifier, extracted_birth_date, extracted_sex,
-  extracted_guardian_name, notes, captured_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
-selectPatientDocuments:
-SELECT * FROM PatientDocumentEntity WHERE patient_id = ? ORDER BY captured_at DESC;
 
 selectPendingSync:
 SELECT * FROM SyncQueueEntity ORDER BY createdAt ASC;

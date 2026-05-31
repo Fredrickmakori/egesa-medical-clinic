@@ -2,7 +2,6 @@ package com.egesa.clinic.shared.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,7 +46,7 @@ fun StatusBadge(level: AcuityLevel, modifier: Modifier = Modifier) {
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
             .background(level.bg)
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Text(level.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = level.fg)
     }
@@ -115,8 +114,8 @@ fun MetricCard(
                 }
             }
             Text(value, style = MaterialTheme.typography.headlineMedium, color = Slate900)
-            if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Slate400)
+            subtitle?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = Slate400)
             }
             // Thin accent line at bottom
             Spacer(Modifier.height(2.dp))

@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.UserRole
 import com.egesa.clinic.shared.StaffMember
+import com.egesa.clinic.shared.data.ClinicAuth
 import com.egesa.clinic.shared.data.FakeRepository
 import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.ui.components.RoleBadge
@@ -104,6 +105,7 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                             error = it.message?.takeIf { message -> message.isNotBlank() } ?: "Invalid credentials"
                             return@launch
                         }
+                        ClinicAuth.setAccessToken(response.accessToken)
                         onLogin(
                             SessionState(
                                 staffId = staff.id,

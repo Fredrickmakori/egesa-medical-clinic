@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.data.MohHtsTally
 import com.egesa.clinic.shared.ServiceIndicatorSummary
+import com.egesa.clinic.shared.ui.components.ModuleHeader
 import com.egesa.clinic.shared.ui.theme.*
 
 @Composable
@@ -22,21 +23,21 @@ fun MohReportScreen(localRepository: LocalRepository) {
     var tallies by remember { mutableStateOf<List<MohHtsTally>>(emptyList()) }
     var indicators by remember { mutableStateOf<List<ServiceIndicatorSummary>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var refreshKey by remember { mutableStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        // Load tallies for the current month
-        // In a real app, add date pickers
+    LaunchedEffect(refreshKey) {
+        isLoading = true
         tallies = localRepository.getHtsReportSummary("2024-01-01", "2024-12-31")
         indicators = localRepository.getServiceIndicatorSummary("2024-01-01", "2030-12-31")
         isLoading = false
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("MOH Reporting Workbench", style = MaterialTheme.typography.headlineSmall, color = Navy800)
-        Text(
-            "Service events saved during care are rolled up into monthly reporting indicators.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Slate500
+        ModuleHeader(
+            title = "MOH Reporting Workbench",
+            subtitle = "Service events saved during care roll up into monthly reporting indicators.",
+            primaryActionLabel = "Refresh",
+            onPrimaryAction = { refreshKey++ },
         )
         Spacer(Modifier.height(16.dp))
 

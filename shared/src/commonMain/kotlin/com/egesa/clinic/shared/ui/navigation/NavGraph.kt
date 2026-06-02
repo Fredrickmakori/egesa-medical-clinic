@@ -50,6 +50,47 @@ val ALL_NAV_ITEMS = listOf(
 fun navItemsFor(role: UserRole): List<ClinicNavItem> =
     ALL_NAV_ITEMS.filter { role in it.visibleTo }
 
+/** Post-login home module per role (admin = Command Center). */
+fun defaultLandingArea(role: UserRole): WorkflowArea = when (role) {
+    UserRole.ADMIN -> WorkflowArea.DASHBOARD
+    UserRole.RECEPTIONIST -> WorkflowArea.RECEPTION
+    UserRole.DOCTOR -> WorkflowArea.CONSULTATION
+    UserRole.NURSE -> WorkflowArea.WARDS
+    UserRole.PHARMACIST -> WorkflowArea.PHARMACY
+}
+
+/** Landing area that never points at a module the role cannot open. */
+fun safeDefaultLandingArea(role: UserRole): WorkflowArea {
+    val preferred = defaultLandingArea(role)
+    if (roleCanAccessArea(role, preferred)) return preferred
+    return navItemsFor(role).firstOrNull()?.area ?: preferred
+}
+
+fun roleCanAccessArea(role: UserRole, area: WorkflowArea): Boolean =
+    navItemsFor(role).any { it.area == area }
+
+fun areaWelcomeMessage(role: UserRole, area: WorkflowArea, firstName: String): String {
+    val moduleHint = when (area) {
+        WorkflowArea.DASHBOARD -> "Track flow, revenue, wards, and alerts from the command center."
+        WorkflowArea.RECEPTION -> "Register patients, manage the queue, and forward to clinical areas."
+        WorkflowArea.APPOINTMENTS -> "Schedule visits and manage today's appointment book."
+        WorkflowArea.CONSULTATION -> "Review encounters, document care, and complete consultations."
+        WorkflowArea.DIAGNOSIS -> "Capture assessments and working diagnoses for active patients."
+        WorkflowArea.LAB_IMAGING -> "Order tests, track specimens, and review results."
+        WorkflowArea.PHARMACY -> "Verify prescriptions and dispense medications safely."
+        WorkflowArea.WARDS -> "Monitor admissions, bedside care, and ward transfers."
+        WorkflowArea.BILLING -> "Collect payments, send M-Pesa STK, and reconcile invoices."
+        WorkflowArea.INVENTORY -> "Track stock levels, reorders, and pharmacy inventory."
+        WorkflowArea.REPORTS -> "Review operational and financial clinic reports."
+        WorkflowArea.MOH_REPORTS -> "Prepare Ministry of Health returns and indicators."
+        WorkflowArea.NOTIFICATIONS -> "Send SMS reminders and manage patient alerts."
+        WorkflowArea.ADMIN -> "Configure staff, facilities, and system policies."
+        WorkflowArea.SETTINGS -> "Adjust clinic preferences and integrations."
+    }
+    val roleLabel = role.name.lowercase().replaceFirstChar { it.uppercase() }
+    return "Welcome, $firstName — $roleLabel workspace. $moduleHint"
+}
+
 data class SessionState(
     val staffId: String,
     val fullName: String,

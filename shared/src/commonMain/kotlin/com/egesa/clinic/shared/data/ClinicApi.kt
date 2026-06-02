@@ -295,6 +295,13 @@ data class UpdateLabOrderStatusRequestDto(
     val visitType: String,
     val providerId: String? = null,
     val facilityId: String,
+    val locationId: String? = null,
+    val sourceType: String? = null,
+    val sourceId: String? = null,
+    val status: String = "DRAFT",
+    val version: Int = 1,
+    val updatedAt: String? = null,
+    val nursingNotes: String? = null,
     val syncState: String = "LOCAL_ONLY"
 )
 

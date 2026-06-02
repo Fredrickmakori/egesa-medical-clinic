@@ -66,7 +66,7 @@ fun PrescriptionPrintPreviewScreen(
         facilityInfo = facilityInfo,
         providerInfo = providerInfo,
         patientInfo = patientInfo,
-        externalPurchase = prescription.isExternalPurchase
+        externalPurchase = false
     )
     val plainTextContent = renderPrescriptionToPlainText(printModel)
     Column(

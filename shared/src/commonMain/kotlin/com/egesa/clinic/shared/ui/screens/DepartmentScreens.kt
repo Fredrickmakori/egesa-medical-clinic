@@ -266,7 +266,7 @@ fun HtsForm(localRepository: LocalRepository, session: SessionState) {
 }
 
 @Composable
-fun PharmacyScreen(localRepository: LocalRepository, session: SessionState) {
+private fun PharmacyDispensingScreen(localRepository: LocalRepository, session: SessionState) {
     var visits by remember { mutableStateOf<List<PatientVisitSummary>>(emptyList()) }
     var selectedEncounterId by remember { mutableStateOf("") }
     var medication by remember { mutableStateOf("") }

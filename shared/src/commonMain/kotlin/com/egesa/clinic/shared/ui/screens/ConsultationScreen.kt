@@ -76,96 +76,194 @@ fun ConsultationScreen(localRepository: LocalRepository, session: SessionState) 
     }
 
     val selectedPatient = patients.firstOrNull { it.id == activePatientId }
-    val tabs = listOf("History", "Examination", "Diagnosis", "Plan")
 
     Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 16.dp),
-        ) {
-            item {
-                Text("Doctor queue / appointments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            }
-            items(appointments) { appointment ->
-                val patient = patients.firstOrNull { it.id == appointment.patientId }
-                Card(colors = CardDefaults.cardColors()) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(patient?.fullName ?: appointment.patientId, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text("${appointment.startTime} • ${appointment.appointmentType}", style = MaterialTheme.typography.bodySmall)
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    val encounter = repository.createEncounter(
-                                        patientId = appointment.patientId,
-                                        providerId = session.staffId,
-                                        facilityId = "EGESA-CLINIC",
-                                        sourceType = EncounterSourceType.APPOINTMENT,
-                                        sourceId = appointment.id,
-                                    )
-                                    activePatientId = appointment.patientId
-                                    activeEncounterId = encounter.encounterId
-                                    status = "Consultation started: ${encounter.encounterId}"
-                                }
-                            }
-                        ) { Text("Start Consultation") }
-                    }
+        DoctorQueue(
+            modifier = Modifier.weight(1f),
+            appointments = appointments,
+            patients = patients,
+            onStartConsultation = { appointment ->
+                scope.launch {
+                    val encounter = repository.createEncounter(
+                        patientId = appointment.patientId,
+                        providerId = session.staffId,
+                        facilityId = "EGESA-CLINIC",
+                        sourceType = EncounterSourceType.APPOINTMENT,
+                        sourceId = appointment.id,
+                    )
+                    activePatientId = appointment.patientId
+                    activeEncounterId = encounter.encounterId
+                    status = "Consultation started: ${encounter.encounterId}"
                 }
             }
-        }
+        )
 
-        Column(Modifier.fillMaxSize().weight(2f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                selectedPatient?.let { "Consultation: ${it.fullName}" } ?: "Select appointment to start",
-                style = MaterialTheme.typography.titleLarge
-            )
-            if (activeEncounterId != null) {
-                TabRow(selectedTabIndex = activeTab) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(selected = activeTab == index, onClick = { activeTab = index }, text = { Text(title) })
-                    }
+        ConsultationWorkArea(
+            modifier = Modifier.weight(2f),
+            selectedPatient = selectedPatient,
+            activeEncounterId = activeEncounterId,
+            activeTab = activeTab,
+            onTabSelected = { activeTab = it },
+            status = status,
+            inputs = ConsultationInputs(
+                chiefComplaint = chiefComplaint, onChiefComplaintChange = { chiefComplaint = it },
+                hpi = hpi, onHpiChange = { hpi = it },
+                examNotes = examNotes, onExamNotesChange = { examNotes = it },
+                diagnosisText = diagnosisText, onDiagnosisTextChange = { diagnosisText = it },
+                diagnosisCode = diagnosisCode, onDiagnosisCodeChange = { diagnosisCode = it },
+                planAdvice = planAdvice, onPlanAdviceChange = { planAdvice = it },
+                followUpDate = followUpDate, onFollowUpDateChange = { followUpDate = it },
+                rxName = rxName, onRxNameChange = { rxName = it },
+                rxDose = rxDose, onRxDoseChange = { rxDose = it },
+                labOrderName = labOrderName, onLabOrderNameChange = { labOrderName = it },
+                imagingStudy = imagingStudy, onImagingStudyChange = { imagingStudy = it }
+            ),
+            onSaveDraft = {
+                scope.launch {
+                    saveBundle(repository, activeEncounterId, chiefComplaint, hpi, examNotes, diagnosisText, diagnosisCode, planAdvice, followUpDate, labOrderName, imagingStudy, rxName, rxDose, finalize = false)
+                    status = "Draft saved"
                 }
-                when (activeTab) {
-                    0 -> {
-                        OutlinedTextField(chiefComplaint, { chiefComplaint = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Chief complaint") })
-                        OutlinedTextField(hpi, { hpi = it }, modifier = Modifier.fillMaxWidth(), label = { Text("HPI") }, minLines = 3)
-                    }
-                    1 -> {
-                        OutlinedTextField(examNotes, { examNotes = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Examination notes") }, minLines = 4)
-                    }
-                    2 -> {
-                        OutlinedTextField(diagnosisText, { diagnosisText = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Diagnosis") })
-                        OutlinedTextField(diagnosisCode, { diagnosisCode = it }, modifier = Modifier.fillMaxWidth(), label = { Text("ICD code") })
-                    }
-                    3 -> {
-                        OutlinedTextField(planAdvice, { planAdvice = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Plan / advice") }, minLines = 3)
-                        OutlinedTextField(followUpDate, { followUpDate = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Follow-up date (ISO)") })
-                        OutlinedTextField(labOrderName, { labOrderName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Lab order") })
-                        OutlinedTextField(imagingStudy, { imagingStudy = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Imaging study") })
-                        OutlinedTextField(rxName, { rxName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Prescription") })
-                        OutlinedTextField(rxDose, { rxDose = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Dose") })
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        scope.launch {
-                            saveBundle(repository, activeEncounterId, chiefComplaint, hpi, examNotes, diagnosisText, diagnosisCode, planAdvice, followUpDate, labOrderName, imagingStudy, rxName, rxDose, finalize = false)
-                            status = "Draft saved"
-                        }
-                    }) { Text("Save Draft") }
-                    Button(onClick = {
-                        scope.launch {
-                            saveBundle(repository, activeEncounterId, chiefComplaint, hpi, examNotes, diagnosisText, diagnosisCode, planAdvice, followUpDate, labOrderName, imagingStudy, rxName, rxDose, finalize = true)
-                            status = "Consultation finalized"
-                        }
-                    }) { Text("Finalize") }
+            },
+            onFinalize = {
+                scope.launch {
+                    saveBundle(repository, activeEncounterId, chiefComplaint, hpi, examNotes, diagnosisText, diagnosisCode, planAdvice, followUpDate, labOrderName, imagingStudy, rxName, rxDose, finalize = true)
+                    status = "Consultation finalized"
                 }
             }
-            if (status.isNotBlank()) {
-                Text(status, style = MaterialTheme.typography.bodySmall)
+        )
+    }
+}
+
+@Composable
+private fun DoctorQueue(
+    modifier: Modifier = Modifier,
+    appointments: List<Appointment>,
+    patients: List<Patient>,
+    onStartConsultation: (Appointment) -> Unit
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 16.dp),
+    ) {
+        item {
+            Text("Doctor queue / appointments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        }
+        items(appointments) { appointment ->
+            val patient = patients.firstOrNull { it.id == appointment.patientId }
+            QueueItem(patient = patient, appointment = appointment, onStartConsultation = onStartConsultation)
+        }
+    }
+}
+
+@Composable
+private fun QueueItem(
+    patient: Patient?,
+    appointment: Appointment,
+    onStartConsultation: (Appointment) -> Unit
+) {
+    Card(colors = CardDefaults.cardColors()) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(patient?.fullName ?: appointment.patientId, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Text("${appointment.startTime} • ${appointment.appointmentType}", style = MaterialTheme.typography.bodySmall)
+            Button(onClick = { onStartConsultation(appointment) }) {
+                Text("Start Consultation")
             }
         }
+    }
+}
+
+data class ConsultationInputs(
+    val chiefComplaint: String, val onChiefComplaintChange: (String) -> Unit,
+    val hpi: String, val onHpiChange: (String) -> Unit,
+    val examNotes: String, val onExamNotesChange: (String) -> Unit,
+    val diagnosisText: String, val onDiagnosisTextChange: (String) -> Unit,
+    val diagnosisCode: String, val onDiagnosisCodeChange: (String) -> Unit,
+    val planAdvice: String, val onPlanAdviceChange: (String) -> Unit,
+    val followUpDate: String, val onFollowUpDateChange: (String) -> Unit,
+    val rxName: String, val onRxNameChange: (String) -> Unit,
+    val rxDose: String, val onRxDoseChange: (String) -> Unit,
+    val labOrderName: String, val onLabOrderNameChange: (String) -> Unit,
+    val imagingStudy: String, val onImagingStudyChange: (String) -> Unit
+)
+
+@Composable
+private fun ConsultationWorkArea(
+    modifier: Modifier = Modifier,
+    selectedPatient: Patient?,
+    activeEncounterId: String?,
+    activeTab: Int,
+    onTabSelected: (Int) -> Unit,
+    status: String,
+    inputs: ConsultationInputs,
+    onSaveDraft: () -> Unit,
+    onFinalize: () -> Unit
+) {
+    val tabs = listOf("History", "Examination", "Diagnosis", "Plan")
+    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            selectedPatient?.let { "Consultation: ${it.fullName}" } ?: "Select appointment to start",
+            style = MaterialTheme.typography.titleLarge
+        )
+        if (activeEncounterId != null) {
+            TabRow(selectedTabIndex = activeTab) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(selected = activeTab == index, onClick = { onTabSelected(index) }, text = { Text(title) })
+                }
+            }
+            ConsultationTabContent(activeTab, inputs)
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onSaveDraft) { Text("Save Draft") }
+                Button(onClick = onFinalize) { Text("Finalize") }
+            }
+        }
+        if (status.isNotBlank()) {
+            Text(status, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun ConsultationTabContent(activeTab: Int, inputs: ConsultationInputs) {
+    when (activeTab) {
+        0 -> HistoryTab(inputs)
+        1 -> ExamTab(inputs)
+        2 -> DiagnosisTab(inputs)
+        3 -> PlanTab(inputs)
+    }
+}
+
+@Composable
+private fun HistoryTab(inputs: ConsultationInputs) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(inputs.chiefComplaint, inputs.onChiefComplaintChange, modifier = Modifier.fillMaxWidth(), label = { Text("Chief complaint") })
+        OutlinedTextField(inputs.hpi, inputs.onHpiChange, modifier = Modifier.fillMaxWidth(), label = { Text("HPI") }, minLines = 3)
+    }
+}
+
+@Composable
+private fun ExamTab(inputs: ConsultationInputs) {
+    OutlinedTextField(inputs.examNotes, inputs.onExamNotesChange, modifier = Modifier.fillMaxWidth(), label = { Text("Examination notes") }, minLines = 4)
+}
+
+@Composable
+private fun DiagnosisTab(inputs: ConsultationInputs) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(inputs.diagnosisText, inputs.onDiagnosisTextChange, modifier = Modifier.fillMaxWidth(), label = { Text("Diagnosis") })
+        OutlinedTextField(inputs.diagnosisCode, inputs.onDiagnosisCodeChange, modifier = Modifier.fillMaxWidth(), label = { Text("ICD code") })
+    }
+}
+
+@Composable
+private fun PlanTab(inputs: ConsultationInputs) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(inputs.planAdvice, inputs.onPlanAdviceChange, modifier = Modifier.fillMaxWidth(), label = { Text("Plan / advice") }, minLines = 3)
+        OutlinedTextField(inputs.followUpDate, inputs.onFollowUpDateChange, modifier = Modifier.fillMaxWidth(), label = { Text("Follow-up date (ISO)") })
+        OutlinedTextField(inputs.labOrderName, inputs.onLabOrderNameChange, modifier = Modifier.fillMaxWidth(), label = { Text("Lab order") })
+        OutlinedTextField(inputs.imagingStudy, inputs.onImagingStudyChange, modifier = Modifier.fillMaxWidth(), label = { Text("Imaging study") })
+        OutlinedTextField(inputs.rxName, inputs.onRxNameChange, modifier = Modifier.fillMaxWidth(), label = { Text("Prescription") })
+        OutlinedTextField(inputs.rxDose, inputs.onRxDoseChange, modifier = Modifier.fillMaxWidth(), label = { Text("Dose") })
     }
 }
 

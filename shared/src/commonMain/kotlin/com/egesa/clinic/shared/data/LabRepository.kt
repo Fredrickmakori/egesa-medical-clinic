@@ -4,7 +4,9 @@ import com.egesa.clinic.shared.domain.LabOrder
 import com.egesa.clinic.shared.domain.LabOrderStatus
 import com.egesa.clinic.shared.domain.LabResult
 import com.egesa.clinic.shared.domain.LabSample
+import com.egesa.clinic.shared.domain.canTransitionTo
 import com.egesa.clinic.shared.db.ClinicDatabase
+import com.egesa.clinic.shared.sync.SyncNotifier
 import app.cash.sqldelight.async.coroutines.awaitAsList
 import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
 import kotlinx.datetime.Clock
@@ -28,7 +30,6 @@ interface LabRepository {
 
 class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
     private val queries = database.clinicDatabaseQueries
-    private val localRepository = LocalRepository(database)
 
     override suspend fun createLabOrder(order: LabOrder): LabOrder {
         val now = Clock.System.now().toString()
@@ -68,7 +69,7 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
             )
         }
         // Hook: queue billable event for billing module reconciliation.
-        localRepository.upsertServiceEvent(
+        upsertServiceEvent(
             ServiceEventInput(
                 serviceEventId = "LAB-BILL-${order.id}",
                 encounterId = order.encounterId ?: "LAB-${order.id}",
@@ -79,7 +80,7 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
                 eventDatetime = now,
             )
         )
-        localRepository.queueSync("LabOrderEntity", order.id, "UPSERT", "{}")
+        queueSync("LabOrderEntity", order.id, "UPSERT", "{}")
         return getLabOrder(order.id) ?: order
     }
 
@@ -103,6 +104,7 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
         }
         return LabOrder(
             id = row.id,
+            localId = row.id,
             patientId = row.patient_id,
             encounterId = row.encounter_id,
             orderedBy = row.ordered_by,
@@ -153,7 +155,7 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
             updated_at = now,
             id = orderId,
         )
-        localRepository.queueSync("LabOrderEntity", orderId, "UPDATE_STATUS", """{"status":"${status.name}"}""")
+        queueSync("LabOrderEntity", orderId, "UPDATE_STATUS", """{"status":"${status.name}"}""")
         return getLabOrder(orderId)
     }
 
@@ -173,7 +175,7 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
             created_at = sample.createdAt,
             updated_at = sample.updatedAt,
         )
-        localRepository.queueSync("LabSampleEntity", sample.id, "UPSERT", "{}")
+        queueSync("LabSampleEntity", sample.id, "UPSERT", "{}")
         return sample
     }
 
@@ -188,7 +190,7 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
                 test_id = result.testId,
                 test_code = result.testCode,
                 test_name = result.testName,
-                value = result.value,
+                value_ = result.value,
                 value_numeric = result.valueNumeric,
                 unit = result.unit,
                 reference_range = result.referenceRange,
@@ -203,10 +205,10 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
                 created_at = result.createdAt,
                 updated_at = result.updatedAt,
             )
-            localRepository.queueSync("LabResultEntity", result.id, "UPSERT", "{}")
+            queueSync("LabResultEntity", result.id, "UPSERT", "{}")
         }
         // Placeholder: async notifier can fan out result-ready events (SMS/app/webhook).
-        localRepository.queueSync("LabNotification", orderId, "RESULTS_READY", """{"actorId":"$actorId","timestamp":"$now"}""")
+        queueSync("LabNotification", orderId, "RESULTS_READY", """{"actorId":"$actorId","timestamp":"$now"}""")
         return queries.selectLabResultsByOrder(orderId).awaitAsList().map {
             LabResult(
                 id = it.id,
@@ -216,7 +218,7 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
                 testId = it.test_id,
                 testCode = it.test_code,
                 testName = it.test_name,
-                value = it.value,
+                value = it.value_,
                 valueNumeric = it.value_numeric,
                 unit = it.unit,
                 referenceRange = it.reference_range,
@@ -232,6 +234,33 @@ class LocalLabRepository(private val database: ClinicDatabase) : LabRepository {
                 updatedAt = it.updated_at,
             )
         }
+    }
+
+    private suspend fun upsertServiceEvent(input: ServiceEventInput) {
+        queries.insertServiceEvent(
+            service_event_id = input.serviceEventId,
+            encounter_id = input.encounterId,
+            program = input.program,
+            indicator_category = input.indicatorCategory,
+            service_code = input.serviceCode,
+            value_text = input.valueText,
+            quantity = input.quantity,
+            event_datetime = input.eventDatetime,
+            sync_state = "LOCAL_ONLY",
+        )
+        queueSync("ServiceEventEntity", input.serviceEventId, "UPSERT", "{}")
+    }
+
+    private suspend fun queueSync(entityType: String, entityId: String, operation: String, payload: String) {
+        queries.insertSyncItem(
+            id = "SYNC-${Clock.System.now().toEpochMilliseconds()}-$entityId",
+            entityType = entityType,
+            entityId = entityId,
+            operation = operation,
+            payload = payload,
+            createdAt = Clock.System.now().toString(),
+        )
+        SyncNotifier.requestSync()
     }
 }
 

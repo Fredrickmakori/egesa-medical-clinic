@@ -55,10 +55,10 @@ class LocalEncounterRepository(private val database: ClinicDatabase) : Encounter
         patientId: String,
         providerId: String?,
         facilityId: String,
-        locationId: String? = null,
-        sourceType: EncounterSourceType? = null,
-        sourceId: String? = null,
-        department: String = "OPD",
+        locationId: String?,
+        sourceType: EncounterSourceType?,
+        sourceId: String?,
+        department: String,
     ): Encounter {
         val now = Clock.System.now().toString()
         val encounterId = "ENC-${Clock.System.now().toEpochMilliseconds()}"

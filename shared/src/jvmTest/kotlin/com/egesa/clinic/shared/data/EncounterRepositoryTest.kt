@@ -16,7 +16,7 @@ class EncounterRepositoryTest {
     @Test
     fun createsAndLoadsEncounter() = runBlocking {
         val db = ClinicDatabase(DatabaseDriverFactory().createDriver())
-        val repository = LocalEncounterRepository(db)
+        val repository: EncounterRepository = LocalEncounterRepository(db)
 
         val created = repository.createEncounter(
             patientId = "PT-100",
@@ -32,7 +32,7 @@ class EncounterRepositoryTest {
     @Test
     fun savesPlanOrdersAndPrescription() = runBlocking {
         val db = ClinicDatabase(DatabaseDriverFactory().createDriver())
-        val repository = LocalEncounterRepository(db)
+        val repository: EncounterRepository = LocalEncounterRepository(db)
         val now = Clock.System.now().toString()
         val encounter = repository.createEncounter(
             patientId = "PT-101",

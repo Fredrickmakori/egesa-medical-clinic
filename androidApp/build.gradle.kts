@@ -8,9 +8,6 @@ plugins {
 tasks.register("prepareKotlinBuildScriptModel") {}
 tasks.register("prepareKotlinIdeaImport") {}
 
-kotlin {
-    jvmToolchain(21)
-}
 
 android {
     namespace = "com.egesa.clinic.android"
@@ -22,13 +19,39 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        multiDexEnabled = true
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    buildTypes {
+        debug {
+            // Emulator/LAN dev default; override per-environment as needed.
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080\"")
+            buildConfigField("boolean", "ALLOW_MOCK_FALLBACK", "true")
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
+        release {
+            // MUST be HTTPS for hospital use. Set this to your cloud API domain.
+            buildConfigField("String", "API_BASE_URL", "\"https://api.example.com\"")
+            buildConfigField("boolean", "ALLOW_MOCK_FALLBACK", "false")
+            isMinifyEnabled = false
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 }
 
@@ -38,4 +61,6 @@ dependencies {
     implementation(compose.foundation)
     implementation(compose.material3)
     implementation(libs.androidx.activity.compose)
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("androidx.multidex:multidex:2.0.1")
 }

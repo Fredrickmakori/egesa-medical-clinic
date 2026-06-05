@@ -2,10 +2,13 @@ package com.egesa.clinic.shared.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,7 +46,7 @@ fun StatusBadge(level: AcuityLevel, modifier: Modifier = Modifier) {
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
             .background(level.bg)
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Text(level.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = level.fg)
     }
@@ -69,6 +72,7 @@ fun RoleBadge(role: String, modifier: Modifier = Modifier) {
         "ADMIN"        -> Navy100 to Navy800
         "DOCTOR"       -> Color(0xFFEDE9FE) to Color(0xFF5B21B6)
         "NURSE"        -> Teal100 to Teal700
+        "PHARMACIST"   -> Color(0xFFDBEAFE) to Color(0xFF1D4ED8)
         "RECEPTIONIST" -> Color(0xFFFEF9C3) to Color(0xFF92400E)
         else           -> Slate100 to Slate500
     }
@@ -110,8 +114,8 @@ fun MetricCard(
                 }
             }
             Text(value, style = MaterialTheme.typography.headlineMedium, color = Slate900)
-            if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Slate400)
+            subtitle?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = Slate400)
             }
             // Thin accent line at bottom
             Spacer(Modifier.height(2.dp))
@@ -286,6 +290,230 @@ fun SyncStatusIndicator(
         StatusDot(color, size = 8)
         if (showLabel) {
             Text(label, fontSize = 10.sp, color = color, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+fun ModuleHeader(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    primaryActionLabel: String? = null,
+    onPrimaryAction: () -> Unit = {},
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = MaterialTheme.typography.headlineMedium, color = Slate900)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Slate500)
+        }
+        primaryActionLabel?.let {
+            Button(
+                onClick = onPrimaryAction,
+                shape = MaterialTheme.shapes.small,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(it, style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
+}
+
+@Composable
+fun ToolbarSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.heightIn(min = 48.dp),
+        singleLine = true,
+        placeholder = { Text(placeholder, style = MaterialTheme.typography.bodySmall) },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        trailingIcon = { Icon(Icons.Filled.Tune, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        textStyle = MaterialTheme.typography.bodyMedium,
+        shape = MaterialTheme.shapes.medium,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Indigo700,
+            unfocusedBorderColor = Slate200,
+            focusedContainerColor = White,
+            unfocusedContainerColor = White,
+        ),
+    )
+}
+
+@Composable
+fun ModuleKpiStrip(
+    metrics: List<DashboardMetricUi>,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        metrics.forEach { metric ->
+            MetricCard(
+                title = metric.title,
+                value = metric.value,
+                subtitle = metric.subtitle,
+                accentColor = metric.color,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+data class DashboardMetricUi(
+    val title: String,
+    val value: String,
+    val subtitle: String? = null,
+    val color: Color = Indigo700,
+)
+
+@Composable
+fun WorkflowQueueRow(
+    title: String,
+    detail: String,
+    status: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(vertical = 9.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusDot(color, 9)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = Slate900)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = Slate500)
+            }
+        }
+        trailing ?: TextBadge(status, color, color.copy(alpha = 0.12f))
+    }
+}
+
+@Composable
+fun EmptyStateCard(
+    title: String,
+    detail: String,
+    modifier: Modifier = Modifier,
+) {
+    ClinicCard(modifier.fillMaxWidth()) {
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = Slate800)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = Slate500)
+        }
+    }
+}
+
+@Composable
+fun FormActionRow(
+    cancelLabel: String,
+    onCancel: () -> Unit,
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    modifier: Modifier = Modifier,
+    primaryEnabled: Boolean = true,
+    cancelEnabled: Boolean = true,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = cancelEnabled,
+            modifier = Modifier.weight(1f),
+            shape = MaterialTheme.shapes.small,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate700),
+        ) {
+            Text(cancelLabel, style = MaterialTheme.typography.labelMedium)
+        }
+        Button(
+            onClick = onPrimary,
+            enabled = primaryEnabled,
+            modifier = Modifier.weight(1f),
+            shape = MaterialTheme.shapes.small,
+            colors = ButtonDefaults.buttonColors(containerColor = Navy800),
+        ) {
+            Text(primaryLabel, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+fun DestructiveTextButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        colors = ButtonDefaults.textButtonColors(contentColor = StatusCritical),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Composable
+fun QuickActionButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit = {},
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(38.dp),
+        shape = MaterialTheme.shapes.small,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate700),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+fun CompactDataTable(
+    headers: List<String>,
+    rows: List<List<String>>,
+    modifier: Modifier = Modifier,
+) {
+    ClinicCard(modifier.fillMaxWidth(), padding = PaddingValues(0.dp)) {
+        Row(Modifier.fillMaxWidth().background(Slate50).padding(horizontal = 12.dp, vertical = 9.dp)) {
+            headers.forEach { header ->
+                Text(header, style = MaterialTheme.typography.labelMedium, color = Slate500, modifier = Modifier.weight(1f))
+            }
+        }
+        rows.forEachIndexed { index, row ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
+                row.forEach { cell ->
+                    Text(cell, style = MaterialTheme.typography.bodySmall, color = Slate700, modifier = Modifier.weight(1f))
+                }
+            }
+            if (index < rows.lastIndex) HorizontalDivider(color = Slate100)
         }
     }
 }

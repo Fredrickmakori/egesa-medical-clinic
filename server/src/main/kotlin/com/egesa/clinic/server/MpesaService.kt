@@ -15,11 +15,11 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 class MpesaService(
-    private val consumerKey: String = requiredEnv("MPESA_CONSUMER_KEY"),
-    private val consumerSecret: String = requiredEnv("MPESA_CONSUMER_SECRET"),
-    private val passkey: String = requiredEnv("MPESA_PASSKEY"),
-    private val shortCode: String = requiredEnv("MPESA_SHORTCODE"),
-    private val callbackUrl: String = requiredEnv("MPESA_CALLBACK_URL"),
+    private val consumerKey: String = optionalEnv("MPESA_CONSUMER_KEY"),
+    private val consumerSecret: String = optionalEnv("MPESA_CONSUMER_SECRET"),
+    private val passkey: String = optionalEnv("MPESA_PASSKEY"),
+    private val shortCode: String = optionalEnv("MPESA_SHORTCODE"),
+    private val callbackUrl: String = optionalEnv("MPESA_CALLBACK_URL"),
     private val json: Json = Json { ignoreUnknownKeys = true }
 ) {
     private val oauthUrl = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
@@ -27,6 +27,7 @@ class MpesaService(
 
     fun initiateStkPush(request: StkPushRequest): ApiResponse {
         return runCatching {
+            requireDarajaConfig()
             val timestamp = timestamp()
             val password = createPassword(timestamp)
             val token = generateOAuthToken()
@@ -131,9 +132,21 @@ class MpesaService(
     private fun timestamp(): String = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
 
     companion object {
-        private fun requiredEnv(name: String): String =
-            System.getenv(name)?.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("Missing required environment variable: $name")
+        private fun optionalEnv(name: String): String = System.getenv(name)?.takeIf { it.isNotBlank() }.orEmpty()
+    }
+
+    private fun requireDarajaConfig() {
+        val missing = listOf(
+            "MPESA_CONSUMER_KEY" to consumerKey,
+            "MPESA_CONSUMER_SECRET" to consumerSecret,
+            "MPESA_PASSKEY" to passkey,
+            "MPESA_SHORTCODE" to shortCode,
+            "MPESA_CALLBACK_URL" to callbackUrl
+        ).filter { it.second.isBlank() }.map { it.first }
+
+        check(missing.isEmpty()) {
+            "Missing required M-Pesa configuration: ${missing.joinToString(", ")}"
+        }
     }
 }
 

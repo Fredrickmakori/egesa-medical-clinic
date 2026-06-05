@@ -1,7 +1,11 @@
 package com.egesa.clinic.shared.data
 
 import com.egesa.clinic.shared.*
+import com.egesa.clinic.shared.domain.LabOrder
+import com.egesa.clinic.shared.domain.LabOrderStatus
+import com.egesa.clinic.shared.domain.LabResult
 import com.egesa.clinic.shared.sync.SyncHealthStatus
+import com.egesa.clinic.shared.domain.OpdEncounterBundle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 
@@ -16,9 +20,9 @@ object FakeRepository {
 
     private var clinicApi: ClinicApi? = null
 
-    // Set after successful login; used by HttpClient DefaultRequest to attach Authorization header.
-    var accessToken: String? = null
-        private set
+    fun clearAccessToken() = ClinicAuth.clearAccessToken()
+
+    fun restoreAccessToken(token: String?) = ClinicAuth.setAccessToken(token)
 
     /**
      * Source of truth for non-production builds is a seeded fixture so login works offline/demo-first.
@@ -42,7 +46,7 @@ object FakeRepository {
     suspend fun login(staffId: String, pin: String): Result<LoginResponseDto> = runResultOrFallback(
         apiCall = {
             val response = it.login(staffId, pin)
-            accessToken = response.accessToken
+            ClinicAuth.setAccessToken(response.accessToken)
             response
         },
         fallback = {
@@ -54,7 +58,7 @@ object FakeRepository {
                 role = UserRole.ADMIN.name,
                 staffName = "Demo User"
             )
-            accessToken = response.accessToken
+            ClinicAuth.setAccessToken(response.accessToken)
             response
         }
     )
@@ -174,6 +178,27 @@ object FakeRepository {
         ConflictResolutionResult(resolved = true, strategy = strategy, finalVersion = maxOf(localVersion, remoteVersion))
     }
 
+    suspend fun createLabOrder(order: LabOrder): Result<LabOrder> = runResultOrFallback({
+        it.createLabOrder(order.toDto()).toDomain()
+    }) { order }
+
+    suspend fun getLabOrder(orderId: String): Result<LabOrder?> = runResultOrFallback({
+        it.getLabOrder(orderId)?.toDomain()
+    }) { null }
+
+    suspend fun getPatientLabOrders(patientId: String): Result<List<LabOrder>> = runResultOrFallback({
+        it.getLabOrdersForPatient(patientId).map { dto -> dto.toDomain() }
+    }) { emptyList() }
+
+    suspend fun updateLabOrderStatus(orderId: String, status: LabOrderStatus, actorId: String): Result<LabOrder> = runResultOrFallback({
+        it.updateLabOrderStatus(orderId, UpdateLabOrderStatusRequestDto(status.name, actorId)).toDomain()
+    }) { throw IllegalStateException("No remote lab order store in fallback mode") }
+
+    suspend fun saveLabResults(orderId: String, actorId: String, results: List<LabResult>): Result<List<LabResult>> = runResultOrFallback({
+        it.saveLabResults(SaveLabResultsRequestDto(orderId = orderId, actorId = actorId, results = results.map { r -> r.toDto() }))
+            .map { dto -> dto.toDomain() }
+    }) { results }
+
     private suspend inline fun <T> runResultOrFallback(
         apiCall: suspend (ClinicApi) -> T,
         fallback: suspend () -> T
@@ -210,23 +235,31 @@ object FakeRepository {
         }
     }
 
-    /**
-     * Get sync health status from server
-     */
-    suspend fun getSyncHealth(): Result<SyncHealthStatus> {
-        return try {
-            delay(200)
-            // Backend route is explicitly defined under payments in the current API spec.
-            // TODO: GET /payments/sync-health
-            Result.success(SyncHealthStatus(
-                status = "healthy",
+    suspend fun getSyncHealth(): Result<SyncHealthStatus> = runResultOrFallback(
+        apiCall = { it.getSyncHealth() },
+        fallback = {
+            SyncHealthStatus(
+                status = if (ClinicAuth.hasToken()) "local-only" else "offline",
                 pendingCount = 0,
                 lastSyncTime = Clock.System.now().toEpochMilliseconds()
-            ))
-        } catch (e: Exception) {
-            Result.failure(e)
+            )
         }
-    }
+    )
+
+    suspend fun createEncounter(bundle: OpdEncounterBundle): Result<OpdEncounterBundle> = runResultOrFallback(
+        apiCall = { it.createEncounter(bundle) },
+        fallback = { bundle }
+    )
+
+    suspend fun getEncounter(encounterId: String): Result<OpdEncounterBundle> = runResultOrFallback(
+        apiCall = { it.getEncounter(encounterId) },
+        fallback = { throw IllegalArgumentException("Encounter $encounterId not found in mock mode") }
+    )
+
+    suspend fun getPatientEncounters(patientId: String): Result<List<OpdEncounterBundle>> = runResultOrFallback(
+        apiCall = { it.getPatientEncounters(patientId) },
+        fallback = { emptyList() }
+    )
 
     @Suppress("UNUSED_PARAMETER")
     private suspend fun Throwable.toRepositoryException(): Throwable = this

@@ -13,7 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.multidex.MultiDex
 import com.egesa.clinic.shared.data.DocumentExtractedData
-import com.egesa.clinic.shared.ui.ClinicApp
+import com.egesa.clinic.shared.ui.mobile.MobileClinicApp
 import com.egesa.clinic.shared.ui.ClientPlatform
 import com.egesa.clinic.shared.data.DocumentCaptureGateway
 import com.egesa.clinic.shared.data.DocumentCaptureResult
@@ -44,8 +44,8 @@ class MainActivity : ComponentActivity() {
                 documentCaptureGateway.onPhotoCaptured(bitmap)
             }
             documentCaptureGateway.bind(imagePicker, cameraPreview)
-            ClinicApp(
-                platform = ClientPlatform.Tablet,
+            MobileClinicApp(
+                platform = ClientPlatform.Mobile,
                 databaseDriverFactory = driverFactory,
                 apiBaseUrl = BuildConfig.API_BASE_URL,
                 allowMockFallback = BuildConfig.ALLOW_MOCK_FALLBACK,

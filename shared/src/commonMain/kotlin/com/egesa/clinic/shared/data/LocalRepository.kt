@@ -1,6 +1,11 @@
 package com.egesa.clinic.shared.data
 
 import com.egesa.clinic.shared.*
+import com.egesa.clinic.shared.domain.LabOrder
+import com.egesa.clinic.shared.domain.LabOrderStatus
+import com.egesa.clinic.shared.domain.LabResult
+import com.egesa.clinic.shared.domain.LabSample
+import com.egesa.clinic.shared.sync.SyncNotifier
 import com.egesa.clinic.shared.db.ClinicDatabase
 import app.cash.sqldelight.async.coroutines.awaitAsList
 import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
@@ -9,12 +14,22 @@ import kotlinx.datetime.Clock
 
 data class EncounterInput(
     val encounterId: String,
+    val serverId: String? = null,
     val patientId: String,
     val encounterDatetime: String,
     val department: String,
     val visitType: VisitType,
     val providerId: String? = null,
-    val facilityId: String
+    val facilityId: String,
+    val locationId: String? = null,
+    val sourceType: String? = null,
+    val sourceId: String? = null,
+    val status: String = "DRAFT",
+    val version: Long = 1,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+    val deletedAt: String? = null,
+    val nursingNotes: String? = null,
 )
 
 data class VitalSignsInput(
@@ -35,22 +50,32 @@ data class VitalSignsInput(
 
 data class DiagnosisInput(
     val diagnosisId: String,
+    val serverId: String? = null,
     val encounterId: String,
     val diagnosisText: String,
     val isPrimary: Boolean,
     val codeSystem: String? = null,
-    val diagnosisCode: String? = null
+    val diagnosisCode: String? = null,
+    val version: Long = 1,
+    val createdAt: String = Clock.System.now().toString(),
+    val updatedAt: String = Clock.System.now().toString(),
+    val deletedAt: String? = null,
 )
 
 data class MedicationOrderInput(
     val medicationOrderId: String,
+    val serverId: String? = null,
     val encounterId: String,
     val medicationName: String,
     val dose: String? = null,
     val route: String? = null,
     val frequency: String? = null,
     val duration: String? = null,
-    val instructions: String? = null
+    val instructions: String? = null,
+    val version: Long = 1,
+    val createdAt: String = Clock.System.now().toString(),
+    val updatedAt: String = Clock.System.now().toString(),
+    val deletedAt: String? = null,
 )
 
 data class EncounterOutcomeInput(
@@ -163,9 +188,10 @@ data class MohHtsTally(
     val count: Int
 )
 
-class LocalRepository(database: ClinicDatabase) {
+class LocalRepository(val database: ClinicDatabase) {
 
     private val dbQueries = database.clinicDatabaseQueries
+    private val labRepository: LabRepository = LocalLabRepository(database)
 
     suspend fun getAllStaff(): List<StaffMember> {
         return dbQueries.selectAllStaff().awaitAsList().map {
@@ -190,6 +216,11 @@ class LocalRepository(database: ClinicDatabase) {
         )
     }
 
+    suspend fun deleteStaff(staffId: String) {
+        dbQueries.deleteStaffById(staffId)
+        queueSync("StaffMemberEntity", staffId, "DELETE", """{"id":"$staffId"}""")
+    }
+
     suspend fun getAllPatients(): List<Patient> =
         dbQueries.selectAllPatients().awaitAsList().map {
             Patient(
@@ -203,6 +234,134 @@ class LocalRepository(database: ClinicDatabase) {
                 acuity = it.acuity,
                 isolation = it.isolation
             )
+        }
+
+    suspend fun getPatientById(patientId: String): Patient? =
+        dbQueries.selectPatientById(patientId).awaitAsOneOrNull()?.let {
+            Patient(
+                id = it.id,
+                fullName = it.fullName,
+                age = it.age.toInt(),
+                sex = LegacyCodeMapper.sex(it.sex),
+                status = it.status,
+                assignedWard = it.assignedWard,
+                roomBed = it.roomBed,
+                acuity = it.acuity,
+                isolation = it.isolation
+            )
+        }
+
+    suspend fun buildClinicalSyncBatch(entityType: String, entityId: String): ClinicalSyncBatchDto? =
+        when (entityType) {
+            "EncounterEntity" -> {
+                val row = dbQueries.selectEncounterById(entityId).awaitAsOneOrNull() ?: return null
+                ClinicalSyncBatchDto(
+                    encounters = listOf(
+                        EncounterDto(
+                            encounterId = row.encounter_id,
+                            patientId = row.patient_id,
+                            encounterDatetime = row.encounter_datetime,
+                            department = row.department,
+                            visitType = row.visit_type,
+                            providerId = row.provider_id,
+                            facilityId = row.facility_id,
+                            locationId = row.location_id,
+                            sourceType = row.source_type,
+                            sourceId = row.source_id,
+                            status = row.status,
+                            version = row.version.toInt(),
+                            updatedAt = row.updated_at,
+                            nursingNotes = row.nursing_notes,
+                            syncState = row.sync_state,
+                        )
+                    )
+                )
+            }
+            "VitalSignsEntity" -> {
+                val row = dbQueries.selectVitalSignsById(entityId).awaitAsOneOrNull() ?: return null
+                ClinicalSyncBatchDto(
+                    vitalSigns = listOf(
+                        VitalSignsDto(
+                            vitalSignsId = row.vital_signs_id,
+                            encounterId = row.encounter_id,
+                            weightKg = row.weight_kg,
+                            heightCm = row.height_cm,
+                            bmi = row.bmi,
+                            temperatureC = row.temperature_c,
+                            systolicBp = row.systolic_bp,
+                            diastolicBp = row.diastolic_bp,
+                            pulseBpm = row.pulse_bpm,
+                            respiratoryRate = row.respiratory_rate,
+                            spo2Percent = row.spo2_percent,
+                            muacCm = row.muac_cm,
+                            recordedAt = row.recorded_at
+                        )
+                    )
+                )
+            }
+            "ServiceEventEntity" -> {
+                val row = dbQueries.selectServiceEventById(entityId).awaitAsOneOrNull() ?: return null
+                ClinicalSyncBatchDto(
+                    serviceEvents = listOf(
+                        ServiceEventDto(
+                            serviceEventId = row.service_event_id,
+                            encounterId = row.encounter_id,
+                            program = row.program,
+                            indicatorCategory = row.indicator_category,
+                            serviceCode = row.service_code,
+                            valueText = row.value_text,
+                            quantity = row.quantity ?: 1L,
+                            eventDatetime = row.event_datetime,
+                            syncState = row.sync_state
+                        )
+                    )
+                )
+            }
+            "PatientDocumentEntity" -> {
+                val row = dbQueries.selectPatientDocumentById(entityId).awaitAsOneOrNull() ?: return null
+                ClinicalSyncBatchDto(
+                    patientDocuments = listOf(
+                        PatientDocumentDto(
+                            documentId = row.document_id,
+                            patientId = row.patient_id,
+                            documentType = row.document_type,
+                            imageUri = row.image_uri,
+                            verificationStatus = row.verification_status,
+                            extractedFullName = row.extracted_full_name,
+                            extractedIdentifier = row.extracted_identifier,
+                            extractedBirthDate = row.extracted_birth_date,
+                            extractedSex = row.extracted_sex,
+                            extractedGuardianName = row.extracted_guardian_name,
+                            notes = row.notes,
+                            capturedAt = row.captured_at
+                        )
+                    )
+                )
+            }
+            "HtsRegisterEntity" -> {
+                val row = dbQueries.selectHtsById(entityId).awaitAsOneOrNull() ?: return null
+                ClinicalSyncBatchDto(
+                    htsEntries = listOf(
+                        HtsRegisterDto(
+                            htsId = row.hts_id,
+                            encounterId = row.encounter_id,
+                            serialNumber = row.serial_number,
+                            htsNumber = row.hts_number,
+                            populationType = row.population_type,
+                            testingPoint = row.testing_point,
+                            test1Result = row.test_1_result,
+                            test2Result = row.test_2_result,
+                            finalResult = row.final_result,
+                            coupleTesting = row.couple_testing,
+                            recencyTestResult = row.recency_test_result,
+                            referredTo = row.referred_to,
+                            linkedToCare = row.linked_to_care == 1L,
+                            remarks = row.remarks
+                        )
+                    )
+                )
+            }
+            else -> null
         }
 
     suspend fun upsertPatient(input: PatientRegistrationInput) {
@@ -317,14 +476,27 @@ class LocalRepository(database: ClinicDatabase) {
         }
 
     suspend fun createEncounter(input: EncounterInput) {
+        val updatedAt = input.updatedAt ?: input.encounterDatetime
+        val createdAt = input.createdAt ?: input.encounterDatetime
         dbQueries.insertEncounter(
             encounter_id = input.encounterId,
+            server_id = input.serverId,
             patient_id = input.patientId,
             encounter_datetime = input.encounterDatetime,
             department = input.department,
             visit_type = input.visitType.code,
             provider_id = input.providerId,
-            facility_id = input.facilityId
+            facility_id = input.facilityId,
+            location_id = input.locationId,
+            source_type = input.sourceType,
+            source_id = input.sourceId,
+            status = input.status,
+            version = input.version,
+            created_at = createdAt,
+            updated_at = updatedAt,
+            deleted_at = input.deletedAt,
+            nursing_notes = input.nursingNotes,
+            sync_state = "LOCAL_ONLY",
         )
         queueSync("EncounterEntity", input.encounterId, "UPSERT", "{}")
     }
@@ -352,6 +524,7 @@ class LocalRepository(database: ClinicDatabase) {
             muac_cm = input.muacCm,
             recorded_at = input.recordedAt
         )
+        queueSync("VitalSignsEntity", input.vitalSignsId, "UPSERT", "{}")
     }
 
     suspend fun insertPatientDocument(input: PatientDocumentInput) {
@@ -393,11 +566,16 @@ class LocalRepository(database: ClinicDatabase) {
     suspend fun upsertDiagnosis(input: DiagnosisInput) {
         dbQueries.insertDiagnosis(
             diagnosis_id = input.diagnosisId,
+            server_id = input.serverId,
             encounter_id = input.encounterId,
             diagnosis_text = input.diagnosisText,
             is_primary = if (input.isPrimary) 1L else 0L,
             code_system = input.codeSystem,
-            diagnosis_code = input.diagnosisCode
+            diagnosis_code = input.diagnosisCode,
+            version = input.version,
+            created_at = input.createdAt,
+            updated_at = input.updatedAt,
+            deleted_at = input.deletedAt,
         )
     }
 
@@ -407,13 +585,18 @@ class LocalRepository(database: ClinicDatabase) {
     suspend fun upsertMedicationOrder(input: MedicationOrderInput) {
         dbQueries.insertMedicationOrder(
             medication_order_id = input.medicationOrderId,
+            server_id = input.serverId,
             encounter_id = input.encounterId,
             medication_name = input.medicationName,
             dose = input.dose,
             route = input.route,
             frequency = input.frequency,
             duration = input.duration,
-            instructions = input.instructions
+            instructions = input.instructions,
+            version = input.version,
+            created_at = input.createdAt,
+            updated_at = input.updatedAt,
+            deleted_at = input.deletedAt,
         )
     }
 
@@ -494,6 +677,7 @@ class LocalRepository(database: ClinicDatabase) {
             payload = payload,
             createdAt = Clock.System.now().toString()
         )
+        SyncNotifier.requestSync()
     }
 
     suspend fun getPendingSync() = dbQueries.selectPendingSync().awaitAsList()
@@ -610,6 +794,30 @@ class LocalRepository(database: ClinicDatabase) {
         queueSync("AppointmentEntity", appointment.id, "UPSERT", payload)
     }
 
+    suspend fun updateAppointmentStatus(appointmentId: String, status: String) {
+        val existing = dbQueries.selectAppointmentById(appointmentId).awaitAsOneOrNull() ?: return
+        insertAppointment(
+            Appointment(
+                id = existing.id,
+                patientId = existing.patient_id,
+                scheduleId = existing.schedule_id,
+                slotId = existing.slot_id,
+                status = status,
+                appointmentType = existing.appointment_type,
+                reason = existing.reason,
+                startTime = existing.start_time,
+                endTime = existing.end_time,
+                createdAt = existing.created_at,
+                updatedAt = Clock.System.now().toString(),
+            )
+        )
+    }
+
+    suspend fun deleteAppointment(appointmentId: String) {
+        dbQueries.deleteAppointmentById(appointmentId)
+        queueSync("AppointmentEntity", appointmentId, "DELETE", """{"id":"$appointmentId"}""")
+    }
+
     suspend fun checkOverlappingAppointments(scheduleId: String, startTime: String, endTime: String): Boolean {
         return dbQueries.checkOverlappingAppointments(
             schedule_id = scheduleId,
@@ -631,5 +839,24 @@ class LocalRepository(database: ClinicDatabase) {
             )
         }
     }
+
+    suspend fun createLabOrder(order: LabOrder): LabOrder = labRepository.createLabOrder(order)
+
+    suspend fun getLabOrder(id: String): LabOrder? = labRepository.getLabOrder(id)
+
+    suspend fun getLabOrdersForPatient(patientId: String): List<LabOrder> =
+        labRepository.getLabOrdersForPatient(patientId)
+
+    suspend fun getLabWorklist(query: LabWorklistQuery): List<LabOrder> =
+        labRepository.getWorklist(query)
+
+    suspend fun updateLabOrderStatus(orderId: String, status: LabOrderStatus, actorId: String): LabOrder? =
+        labRepository.updateOrderStatus(orderId, status, actorId)
+
+    suspend fun saveLabSample(sample: LabSample): LabSample =
+        labRepository.saveSample(sample)
+
+    suspend fun saveLabResults(orderId: String, results: List<LabResult>, actorId: String): List<LabResult> =
+        labRepository.saveResults(orderId, results, actorId)
 }
 

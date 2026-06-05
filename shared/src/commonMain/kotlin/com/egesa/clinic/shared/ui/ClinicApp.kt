@@ -1,29 +1,39 @@
 package com.egesa.clinic.shared.ui
 
 import androidx.compose.runtime.*
+import com.egesa.clinic.shared.data.ClinicAuth
 import com.egesa.clinic.shared.data.FakeRepository
 import com.egesa.clinic.shared.data.KtorClinicApi
 import com.egesa.clinic.shared.data.LocalRepository
+import com.egesa.clinic.shared.sync.SyncManager
+import com.egesa.clinic.shared.sync.SyncNotifier
+import com.egesa.clinic.shared.sync.SyncStatus
+import com.egesa.clinic.shared.sync.SyncUploader
 import com.egesa.clinic.shared.data.DocumentCaptureGateway
 import com.egesa.clinic.shared.data.NoopDocumentCaptureGateway
 import com.egesa.clinic.shared.db.ClinicDatabase
 import com.egesa.clinic.shared.db.DatabaseDriverFactory
 import com.egesa.clinic.shared.ui.navigation.SessionState
 import com.egesa.clinic.shared.ui.screens.LoginScreen
-import com.egesa.clinic.shared.ui.shell.ResponsiveShell
 import com.egesa.clinic.shared.ui.theme.ClinicTheme
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.header
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 
-enum class ClientPlatform { Desktop, Tablet }
+enum class ClientPlatform { Desktop, Tablet, Mobile }
 
 @Composable
 fun ClinicApp(
-    @Suppress("UNUSED_PARAMETER") platform: ClientPlatform,
+    platform: ClientPlatform,
+    uiMode: AppUiMode = AppUiMode.Adaptive,
     databaseDriverFactory: DatabaseDriverFactory,
     apiBaseUrl: String? = null,
     allowMockFallback: Boolean = true,
@@ -50,18 +60,19 @@ fun ClinicApp(
                     isLenient = true
                 })
             }
-            // Bearer token is installed after login via FakeRepository.accessToken.
-            // Server endpoints are JWT-protected; without this header requests will be rejected.
+            // Bearer token is read from ClinicAuth on every request (set after login).
             defaultRequest {
-                val token = FakeRepository.accessToken
-                if (!token.isNullOrBlank()) {
+                ClinicAuth.accessToken?.let { token ->
                     header("Authorization", "Bearer $token")
                 }
             }
         }
         
         // Use emulator localhost for Android, standard localhost for others (dev only).
-        val defaultBaseUrl = if (platform == ClientPlatform.Tablet) "http://10.0.2.2:8080" else "http://localhost:8080"
+        val defaultBaseUrl = when (platform) {
+            ClientPlatform.Tablet -> "http://10.0.2.2:8080"
+            ClientPlatform.Desktop, ClientPlatform.Mobile -> "http://localhost:8080"
+        }
         val baseUrl = apiBaseUrl ?: defaultBaseUrl
 
         // For hospital use, mock fallback should be disabled and HTTPS should be used.
@@ -85,16 +96,49 @@ fun ClinicApp(
     ClinicTheme {
         var session by remember { mutableStateOf<SessionState?>(null) }
 
+        LaunchedEffect(session?.staffId, session?.token) {
+            val staffId = session?.staffId ?: return@LaunchedEffect
+            ClinicAuth.setAccessToken(session?.token)
+            val repository = localRepository ?: return@LaunchedEffect
+            val syncManager = SyncManager(repository)
+
+            suspend fun runSyncCycle() {
+                session = session?.copy(syncStatus = SyncStatus.SYNCING)
+                val health = syncManager.runAutoSync(isOnline = ClinicAuth.hasToken()) { entityType, entityId, payload ->
+                    SyncUploader.upload(repository, entityType, entityId, payload)
+                }
+                session = session?.copy(
+                    syncStatus = health.status,
+                    lastSyncTime = Clock.System.now().toEpochMilliseconds()
+                )
+            }
+
+            runSyncCycle()
+            coroutineScope {
+                launch {
+                    SyncNotifier.requests.collect {
+                        if (session?.staffId == staffId) runSyncCycle()
+                    }
+                }
+                while (isActive && session?.staffId == staffId) {
+                    delay(30_000)
+                    runSyncCycle()
+                }
+            }
+        }
+
         if (session == null) {
             LoginScreen(localRepository = localRepository!!, onLogin = { session = it })
         } else {
-            // ResponsiveShell automatically adapts to screen size
-            // No need to manually switch between Desktop/Tablet layouts
-            ResponsiveShell(
+            ClinicAuthenticatedShell(
+                uiMode = uiMode,
                 session = session!!,
                 localRepository = localRepository!!,
                 documentCaptureGateway = documentCaptureGateway,
-                onLogout = { session = null }
+                onLogout = {
+                    FakeRepository.clearAccessToken()
+                    session = null
+                },
             )
         }
     }

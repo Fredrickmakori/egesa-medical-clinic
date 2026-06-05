@@ -41,6 +41,7 @@ import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.data.MedicationOrderInput
 import com.egesa.clinic.shared.data.PatientRegistrationInput
 import com.egesa.clinic.shared.data.ServiceEventInput
+import com.egesa.clinic.shared.ui.components.FormActionRow
 import com.egesa.clinic.shared.ui.components.HtsRegisterRow
 import com.egesa.clinic.shared.ui.navigation.SessionState
 import com.egesa.clinic.shared.ui.theme.Navy800
@@ -124,8 +125,21 @@ private fun EncounterCaptureForm(
                 OutlinedTextField(medication, { medication = it }, label = { Text("Prescription / medication") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(outcome, { outcome = it.uppercase() }, label = { Text("Outcome: DISCHARGED, REFERRED, ADMITTED") }, modifier = Modifier.fillMaxWidth())
 
-                Button(
-                    onClick = {
+                FormActionRow(
+                    cancelLabel = "Clear",
+                    onCancel = {
+                        patientId = "PT-${Clock.System.now().toEpochMilliseconds()}"
+                        fullName = ""
+                        age = ""
+                        sex = "female"
+                        primary = ""
+                        secondary = ""
+                        medication = ""
+                        outcome = "DISCHARGED"
+                        status = ""
+                    },
+                    primaryLabel = "Save encounter",
+                    onPrimary = {
                         scope.launch {
                             status = saveProgramEncounter(
                                 localRepository = localRepository,
@@ -144,10 +158,7 @@ private fun EncounterCaptureForm(
                             )
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Save encounter locally")
-                }
+                )
                 if (status.isNotBlank()) {
                     Text(status, style = MaterialTheme.typography.bodySmall, color = Slate700)
                 }
@@ -191,8 +202,24 @@ fun HtsForm(localRepository: LocalRepository, session: SessionState) {
                 OutlinedTextField(sex, { sex = it }, label = { Text("Sex") }, modifier = Modifier.fillMaxWidth())
                 HtsRegisterRow(entry = entry) { entry = it }
 
-                Button(
-                    onClick = {
+                FormActionRow(
+                    cancelLabel = "Clear",
+                    onCancel = {
+                        patientId = "PT-${Clock.System.now().toEpochMilliseconds()}"
+                        fullName = ""
+                        age = ""
+                        sex = "female"
+                        entry = HtsRegisterInput(
+                            htsId = "HTS-${Clock.System.now().toEpochMilliseconds()}",
+                            encounterId = "ENC-${Clock.System.now().toEpochMilliseconds()}",
+                            populationType = "General Pop",
+                            testingPoint = "OPD",
+                            finalResult = HivStatus.NEGATIVE,
+                        )
+                        status = ""
+                    },
+                    primaryLabel = "Save HTS",
+                    onPrimary = {
                         scope.launch {
                             val now = Clock.System.now().toString()
                             val encounterId = "ENC-${Clock.System.now().toEpochMilliseconds()}"
@@ -201,7 +228,7 @@ fun HtsForm(localRepository: LocalRepository, session: SessionState) {
                                     id = patientId.trim(),
                                     fullName = fullName.ifBlank { patientId.trim() },
                                     age = age.toIntOrNull() ?: 0,
-                                    sex = sex.toSex()
+                                    sex = sex.toSex(),
                                 )
                             )
                             localRepository.createEncounter(
@@ -212,7 +239,7 @@ fun HtsForm(localRepository: LocalRepository, session: SessionState) {
                                     department = "HTS",
                                     visitType = VisitType.OUTPATIENT,
                                     providerId = session.staffId,
-                                    facilityId = "EGESA-CLINIC"
+                                    facilityId = "EGESA-CLINIC",
                                 )
                             )
                             localRepository.upsertHtsEntry(entry.copy(encounterId = encounterId))
@@ -224,17 +251,14 @@ fun HtsForm(localRepository: LocalRepository, session: SessionState) {
                                     indicatorCategory = "HTS_${entry.finalResult.name}",
                                     serviceCode = entry.testingPoint,
                                     valueText = entry.finalResult.code,
-                                    eventDatetime = now
+                                    eventDatetime = now,
                                 )
                             )
                             status = "Saved locally and queued for sync."
                             entry = entry.copy(htsId = "HTS-${Clock.System.now().toEpochMilliseconds()}")
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Save HTS encounter")
-                }
+                )
                 if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodySmall, color = Slate700)
             }
         }
@@ -242,7 +266,7 @@ fun HtsForm(localRepository: LocalRepository, session: SessionState) {
 }
 
 @Composable
-fun PharmacyScreen(localRepository: LocalRepository, session: SessionState) {
+private fun PharmacyDispensingScreen(localRepository: LocalRepository, session: SessionState) {
     var visits by remember { mutableStateOf<List<PatientVisitSummary>>(emptyList()) }
     var selectedEncounterId by remember { mutableStateOf("") }
     var medication by remember { mutableStateOf("") }
@@ -270,8 +294,16 @@ fun PharmacyScreen(localRepository: LocalRepository, session: SessionState) {
                 OutlinedTextField(selectedEncounterId, { selectedEncounterId = it }, label = { Text("Encounter ID") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(medication, { medication = it }, label = { Text("Medication dispensed") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(quantity, { quantity = it.filter { ch -> ch.isDigit() } }, label = { Text("Quantity") }, modifier = Modifier.fillMaxWidth())
-                Button(
-                    onClick = {
+                FormActionRow(
+                    cancelLabel = "Clear",
+                    onCancel = {
+                        medication = ""
+                        quantity = "1"
+                        status = ""
+                        selectedEncounterId = visits.firstOrNull()?.encounterId.orEmpty()
+                    },
+                    primaryLabel = "Save dispense",
+                    onPrimary = {
                         scope.launch {
                             val nowMs = Clock.System.now().toEpochMilliseconds()
                             localRepository.upsertServiceEvent(
@@ -282,7 +314,7 @@ fun PharmacyScreen(localRepository: LocalRepository, session: SessionState) {
                                     indicatorCategory = "DISPENSED",
                                     serviceCode = medication.trim(),
                                     valueText = "Dispensed by ${session.staffId}",
-                                    quantity = quantity.toLongOrNull() ?: 1
+                                    quantity = quantity.toLongOrNull() ?: 1,
                                 )
                             )
                             localRepository.upsertMedicationOrder(
@@ -291,16 +323,13 @@ fun PharmacyScreen(localRepository: LocalRepository, session: SessionState) {
                                     encounterId = selectedEncounterId.trim(),
                                     medicationName = medication.trim(),
                                     dose = quantity.ifBlank { "1" },
-                                    instructions = "Dispensed"
+                                    instructions = "Dispensed",
                                 )
                             )
                             status = "Dispensing saved locally and queued for sync."
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Save dispense")
-                }
+                )
                 if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodySmall, color = Slate700)
             }
         }

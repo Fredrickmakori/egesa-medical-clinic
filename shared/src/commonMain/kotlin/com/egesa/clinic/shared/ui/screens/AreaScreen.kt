@@ -22,7 +22,6 @@ import com.egesa.clinic.shared.data.FakeRepository
 import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.data.PatientChart
 import com.egesa.clinic.shared.data.DocumentCaptureGateway
-import com.egesa.clinic.shared.data.DocumentCaptureResult
 import com.egesa.clinic.shared.data.EncounterInput
 import com.egesa.clinic.shared.data.NoopDocumentCaptureGateway
 import com.egesa.clinic.shared.data.PatientDocumentInput
@@ -35,6 +34,13 @@ import com.egesa.clinic.shared.data.MedicationOrderInput
 import com.egesa.clinic.shared.data.EncounterOutcomeInput
 import com.egesa.clinic.shared.ui.components.*
 import com.egesa.clinic.shared.ui.navigation.SessionState
+import com.egesa.clinic.shared.ui.screens.registration.PatientRegistrationFlow
+import com.egesa.clinic.shared.ui.screens.registration.calculateBmi
+import com.egesa.clinic.shared.ui.screens.registration.hasVitals
+import com.egesa.clinic.shared.ui.screens.registration.decimalInput
+import com.egesa.clinic.shared.ui.screens.registration.digitsOnly
+import com.egesa.clinic.shared.ui.navigation.areaWelcomeMessage
+import com.egesa.clinic.shared.ui.navigation.roleCanAccessArea
 import com.egesa.clinic.shared.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -48,8 +54,8 @@ fun AreaScreen(
     localRepository: LocalRepository,
     documentCaptureGateway: DocumentCaptureGateway = NoopDocumentCaptureGateway
 ) {
-    if (!RolePermissionMap.hasPermission(session.role, permissionForArea(area))) {
-        AccessDeniedScreen(area)
+    if (!roleCanAccessArea(session.role, area)) {
+        AccessDeniedScreen(session.role)
         return
     }
 
@@ -58,9 +64,9 @@ fun AreaScreen(
         WorkflowArea.RECEPTION    -> ReceptionScreen(localRepository, session, documentCaptureGateway)
         WorkflowArea.APPOINTMENTS -> AppointmentsScreen(localRepository, session)
         WorkflowArea.WARDS        -> WardsScreen()
-        WorkflowArea.CONSULTATION -> ClinicalProgramsScreen(localRepository, session)
+        WorkflowArea.CONSULTATION -> ConsultationScreen(localRepository, session)
         WorkflowArea.DIAGNOSIS    -> ClinicalProgramsScreen(localRepository, session)
-        WorkflowArea.LAB_IMAGING  -> LabImagingScreen()
+        WorkflowArea.LAB_IMAGING  -> LabModuleScreen(localRepository, session)
         WorkflowArea.PHARMACY     -> PharmacyScreen(localRepository, session)
         WorkflowArea.BILLING      -> BillingScreen()
         WorkflowArea.INVENTORY    -> InventoryScreen()
@@ -72,29 +78,24 @@ fun AreaScreen(
     }
 }
 
-private fun permissionForArea(area: WorkflowArea): Permission = when (area) {
-    WorkflowArea.ADMIN -> Permission.SYSTEM_CONFIG
-    WorkflowArea.RECEPTION -> Permission.QUEUE_MANAGE
-    WorkflowArea.APPOINTMENTS -> Permission.APPOINTMENT_MANAGE
-    WorkflowArea.WARDS -> Permission.WARD_ADMISSION
-    WorkflowArea.CONSULTATION -> Permission.CONSULTATION_WRITE
-    WorkflowArea.DIAGNOSIS -> Permission.DIAGNOSIS_WRITE
-    WorkflowArea.LAB_IMAGING -> Permission.LAB_RESULT_MANAGE
-    WorkflowArea.PHARMACY -> Permission.PHARMACY_DISPENSE
-    WorkflowArea.BILLING -> Permission.PAYMENT_INITIATE
-    WorkflowArea.INVENTORY -> Permission.INVENTORY_MANAGE
-    WorkflowArea.NOTIFICATIONS -> Permission.NOTIFICATION_MANAGE
-    WorkflowArea.REPORTS -> Permission.AUDIT_VIEW
-    WorkflowArea.MOH_REPORTS -> Permission.AUDIT_VIEW
-    else -> Permission.PATIENT_READ // Default safe permission
-}
-
 @Composable
-private fun AccessDeniedScreen(area: WorkflowArea) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Access Denied", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.error)
-            Text("You do not have permission to access ${area.name}")
+private fun AccessDeniedScreen(role: UserRole) {
+    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Access denied", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.error)
+            Text(
+                "Your ${role.name.lowercase()} account cannot open this module.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Slate500,
+            )
+            Text(
+                "Use the navigation menu for modules assigned to your role.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate400,
+            )
         }
     }
 }
@@ -138,10 +139,10 @@ private fun DashboardScreen(session: SessionState) {
     ) {
         // Greeting
         item {
+            val firstName = session.fullName.substringBefore(' ').ifBlank { session.fullName }
             ModuleHeader(
                 title = "Command Center",
-                subtitle = "Good morning, ${session.fullName.split(" ").first()}. Track patient flow, revenue, wards, stock, and reminders from one console.",
-                primaryActionLabel = "Register",
+                subtitle = areaWelcomeMessage(session.role, WorkflowArea.DASHBOARD, firstName),
             )
         }
 
@@ -184,12 +185,13 @@ private fun DashboardScreen(session: SessionState) {
             SectionHeader("Workflow Bottlenecks")
             Spacer(Modifier.height(10.dp))
             ClinicCard(Modifier.fillMaxWidth()) {
-                val workflowCells = if (bottlenecks!!.isEmpty()) listOf(
+                val b = bottlenecks
+                val workflowCells = if (b.isNullOrEmpty()) listOf(
                     BottleneckCell("Reception queue", "High", 7),
                     BottleneckCell("Lab results", "Moderate", 9),
                     BottleneckCell("Billing approval", "Low", 4),
                     BottleneckCell("SMS reminders", "Moderate", 12),
-                ) else bottlenecks!!
+                ) else b
                 workflowCells.forEachIndexed { i, cell ->
                     val (fg, bg) = when (cell.severity) {
                         "Critical" -> StatusCritical to Color(0xFFFEE2E2)
@@ -229,13 +231,13 @@ private fun DashboardScreen(session: SessionState) {
                 ClinicCard(Modifier.weight(1f)) {
                     SectionHeader("Quick Actions")
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QuickActionButton("Register patient", Modifier.weight(1f))
-                        QuickActionButton("Book visit", Modifier.weight(1f))
+                        QuickActionButton("Register patient", Modifier.weight(1f), enabled = false)
+                        QuickActionButton("Book visit", Modifier.weight(1f), enabled = false)
                     }
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QuickActionButton("Start invoice", Modifier.weight(1f))
-                        QuickActionButton("Send SMS", Modifier.weight(1f))
+                        QuickActionButton("Start invoice", Modifier.weight(1f), enabled = false)
+                        QuickActionButton("Send SMS", Modifier.weight(1f), enabled = false)
                     }
                 }
             }
@@ -246,13 +248,7 @@ private fun DashboardScreen(session: SessionState) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Patient list (left)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SectionHeader("Active Patients",
-                        action = {
-                            TextButton(onClick = {}) {
-                                Text("View all", style = MaterialTheme.typography.labelMedium, color = Navy800)
-                            }
-                        }
-                    )
+                    SectionHeader("Active Patients")
                     patients?.forEach { PatientCard(it) }
                 }
 
@@ -345,7 +341,7 @@ private fun ReceptionScreen(
     if (patients == null) { ScreenLoading(); return }
 
     if (showRegister) {
-        RegisterPatientDialog(
+        PatientRegistrationFlow(
             documentCaptureGateway = documentCaptureGateway,
             onDismiss = { showRegister = false },
             onRegister = { input, triageLevel, clinical, document ->
@@ -415,6 +411,7 @@ private fun ReceptionScreen(
                 }
             }
         )
+        return
     }
 
     val filteredPatients = patients!!.filter {
@@ -544,17 +541,52 @@ private fun ReceptionScreen(
                     }
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            QuickActionButton("Check in", Modifier.weight(1f))
-                            QuickActionButton("Appointment", Modifier.weight(1f))
-                            QuickActionButton("Billing", Modifier.weight(1f))
+                            QuickActionButton("Register", Modifier.weight(1f), onClick = { showRegister = true })
+                            val selectedPatient = patients!!.find { it.id == selectedPatientId }
+                            QuickActionButton(
+                                "Check in",
+                                Modifier.weight(1f),
+                                enabled = selectedPatient != null,
+                                onClick = {
+                                    selectedPatient?.let { patient ->
+                                        scope.launch {
+                                            actionError = null
+                                            val result = FakeRepository.checkInPatient(patient, triageLevel = 3)
+                                            if (result.isSuccess) {
+                                                actionMessage = "Checked in ${patient.fullName}."
+                                            } else {
+                                                actionError = result.exceptionOrNull()?.message ?: "Check-in failed"
+                                            }
+                                            refreshKey++
+                                        }
+                                    }
+                                },
+                            )
+                            QuickActionButton("Appointment", Modifier.weight(1f), enabled = false)
+                        }
+                    }
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            QuickActionButton("Billing", Modifier.weight(1f), enabled = false)
+                            QuickActionButton("Send SMS", Modifier.weight(1f), enabled = false)
                         }
                     }
                     items(filteredPatients) { p ->
-                        PatientCard(
-                            patient = p,
-                            selected = p.id == selectedPatientId,
-                            onClick = { selectedPatientId = p.id }
-                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            PatientCard(
+                                patient = p,
+                                selected = p.id == selectedPatientId,
+                                onClick = { selectedPatientId = p.id },
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { selectedPatientId = p.id }) {
+                                Text("View", color = Navy800, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -563,7 +595,20 @@ private fun ReceptionScreen(
 
             PatientChartPanel(
                 chart = selectedChart,
-                modifier = Modifier.weight(0.58f).fillMaxHeight().padding(horizontal = 20.dp)
+                modifier = Modifier.weight(0.58f).fillMaxHeight().padding(horizontal = 20.dp),
+                onClose = { selectedPatientId = null },
+                onDeleteEncounter = { encounterId ->
+                    scope.launch {
+                        runCatching { localRepository.deleteEncounter(encounterId) }
+                            .onSuccess {
+                                actionMessage = "Encounter removed from local chart."
+                                refreshKey++
+                            }
+                            .onFailure {
+                                actionError = it.message ?: "Could not delete encounter"
+                            }
+                    }
+                },
             )
         }
     }
@@ -572,7 +617,12 @@ private fun ReceptionScreen(
 // â”€â”€ Wards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
-private fun PatientChartPanel(chart: PatientChart?, modifier: Modifier = Modifier) {
+private fun PatientChartPanel(
+    chart: PatientChart?,
+    modifier: Modifier = Modifier,
+    onClose: () -> Unit = {},
+    onDeleteEncounter: ((String) -> Unit)? = null,
+) {
     LazyColumn(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -593,9 +643,14 @@ private fun PatientChartPanel(chart: PatientChart?, modifier: Modifier = Modifie
                     Text(chart.patient.fullName, style = MaterialTheme.typography.headlineSmall, color = Slate900)
                     Text("${chart.patient.id}  -  ${chart.patient.age} yrs, ${chart.patient.sex.code}", style = MaterialTheme.typography.bodySmall, color = Slate500)
                 }
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    StatusBadge(acuityLevel(chart.patient.acuity))
-                    TextBadge(chart.patient.status, Slate600, Slate100)
+                Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        StatusBadge(acuityLevel(chart.patient.acuity))
+                        TextBadge(chart.patient.status, Slate600, Slate100)
+                    }
+                    TextButton(onClick = onClose) {
+                        Text("Close", color = Slate600)
+                    }
                 }
             }
         }
@@ -660,11 +715,19 @@ private fun PatientChartPanel(chart: PatientChart?, modifier: Modifier = Modifie
             items(chart.encounters) { encounter ->
                 ClinicCard(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
                             Text(encounter.department, style = MaterialTheme.typography.titleMedium, color = Slate900)
                             Text("${encounter.visitType.code}  -  ${encounter.encounterDatetime}", style = MaterialTheme.typography.bodySmall, color = Slate500)
                         }
-                        TextBadge(encounter.syncState, Navy800, Navy50)
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextBadge(encounter.syncState, Navy800, Navy50)
+                            onDeleteEncounter?.let { onDelete ->
+                                DestructiveTextButton(
+                                    label = "Delete",
+                                    onClick = { onDelete(encounter.encounterId) },
+                                )
+                            }
+                        }
                     }
                     Spacer(Modifier.height(10.dp))
                     ChartSection("Vitals", encounter.vitals)
@@ -698,315 +761,6 @@ private fun ChartSection(title: String, values: List<String>) {
         }
     }
     Spacer(Modifier.height(8.dp))
-}
-
-@Composable
-private fun RegisterPatientDialog(
-    documentCaptureGateway: DocumentCaptureGateway,
-    onDismiss: () -> Unit,
-    onRegister: (PatientRegistrationInput, Int, RegistrationClinicalInput, PatientDocumentInput?) -> Unit
-) {
-    val dialogScope = rememberCoroutineScope()
-    var id by remember { mutableStateOf("PT-${Clock.System.now().toEpochMilliseconds()}") }
-    var fullName by remember { mutableStateOf("") }
-    var age by remember { mutableStateOf("") }
-    var sex by remember { mutableStateOf("female") }
-    var assignedWard by remember { mutableStateOf("") }
-    var roomBed by remember { mutableStateOf("") }
-    var acuity by remember { mutableStateOf("Moderate") }
-    var isolation by remember { mutableStateOf("") }
-    var triageLevel by remember { mutableStateOf("3") }
-    var validationError by remember { mutableStateOf<String?>(null) }
-    var documentType by remember { mutableStateOf("National ID") }
-    var documentPhotoUri by remember { mutableStateOf("") }
-    var verificationStatus by remember { mutableStateOf("PENDING_REVIEW") }
-    var extractedFullName by remember { mutableStateOf("") }
-    var extractedIdentifier by remember { mutableStateOf("") }
-    var extractedBirthDate by remember { mutableStateOf("") }
-    var extractedSex by remember { mutableStateOf("") }
-    var extractedGuardianName by remember { mutableStateOf("") }
-    var documentNotes by remember { mutableStateOf("") }
-    var weightKg by remember { mutableStateOf("") }
-    var heightCm by remember { mutableStateOf("") }
-    var temperatureC by remember { mutableStateOf("") }
-    var systolicBp by remember { mutableStateOf("") }
-    var diastolicBp by remember { mutableStateOf("") }
-    var pulseBpm by remember { mutableStateOf("") }
-    var respiratoryRate by remember { mutableStateOf("") }
-    var spo2Percent by remember { mutableStateOf("") }
-    var muacCm by remember { mutableStateOf("") }
-    var queueDestination by remember { mutableStateOf("Triage") }
-    var queuePriority by remember { mutableStateOf("Routine") }
-    var queueNote by remember { mutableStateOf("") }
-    var documentActionMessage by remember { mutableStateOf<String?>(null) }
-    var documentActionBusy by remember { mutableStateOf(false) }
-
-    fun applyCaptureResult(result: DocumentCaptureResult) {
-        result.imageUri?.let { documentPhotoUri = it }
-        result.extractedData.fullName?.let { extractedFullName = it }
-        result.extractedData.identifier?.let { extractedIdentifier = it }
-        result.extractedData.birthDate?.let { extractedBirthDate = it }
-        result.extractedData.sex?.let { extractedSex = it }
-        result.extractedData.guardianName?.let { extractedGuardianName = it }
-        documentActionMessage = result.message
-    }
-
-    fun runDocumentAction(action: suspend () -> DocumentCaptureResult) {
-        dialogScope.launch {
-            documentActionBusy = true
-            runCatching { action() }
-                .onSuccess { applyCaptureResult(it) }
-                .onFailure { documentActionMessage = it.message ?: "Document action failed." }
-            documentActionBusy = false
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Register patient") },
-        text = {
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 560.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    validationError?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = StatusCritical)
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    SectionHeader("Patient Details")
-                }
-                item { OutlinedTextField(id, { id = it }, label = { Text("Patient ID") }, modifier = Modifier.fillMaxWidth()) }
-                item { OutlinedTextField(fullName, { fullName = it }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth()) }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(age, { age = it.filter { ch -> ch.isDigit() } }, label = { Text("Age") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(triageLevel, { triageLevel = it.filter { ch -> ch.isDigit() }.take(1) }, label = { Text("Triage") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item { OutlinedTextField(sex, { sex = it }, label = { Text("Sex") }, modifier = Modifier.fillMaxWidth()) }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(assignedWard, { assignedWard = it }, label = { Text("Ward") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(roomBed, { roomBed = it }, label = { Text("Bed") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(acuity, { acuity = it }, label = { Text("Acuity") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(isolation, { isolation = it }, label = { Text("Isolation") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item { SectionHeader("Document Verification") }
-                item {
-                    documentActionMessage?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = Slate500)
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(documentType, { documentType = it }, label = { Text("Document type") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(verificationStatus, { verificationStatus = it }, label = { Text("Status") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item { OutlinedTextField(documentPhotoUri, { documentPhotoUri = it }, label = { Text("Photo URI or file path") }, modifier = Modifier.fillMaxWidth()) }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                runDocumentAction {
-                                    documentCaptureGateway.capturePhoto(documentType.ifBlank { "Document" })
-                                }
-                            },
-                            enabled = !documentActionBusy && documentCaptureGateway.canCapturePhoto,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Navy800)
-                        ) {
-                            Text("Take photo")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                runDocumentAction {
-                                    documentCaptureGateway.attachImage(documentType.ifBlank { "Document" })
-                                }
-                            },
-                            enabled = !documentActionBusy && documentCaptureGateway.canAttachImage,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Attach image")
-                        }
-                    }
-                }
-                item {
-                    OutlinedButton(
-                        onClick = {
-                            runDocumentAction {
-                                documentCaptureGateway.extractData(
-                                    imageUri = documentPhotoUri,
-                                    documentType = documentType.ifBlank { "Document" }
-                                )
-                            }
-                        },
-                        enabled = !documentActionBusy && documentPhotoUri.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Extract from image")
-                    }
-                }
-                item { OutlinedTextField(extractedFullName, { extractedFullName = it }, label = { Text("Extracted full name") }, modifier = Modifier.fillMaxWidth()) }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(extractedIdentifier, { extractedIdentifier = it }, label = { Text("Extracted ID") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(extractedBirthDate, { extractedBirthDate = it }, label = { Text("Birth date") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(extractedSex, { extractedSex = it }, label = { Text("Extracted sex") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(extractedGuardianName, { extractedGuardianName = it }, label = { Text("Guardian") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item { OutlinedTextField(documentNotes, { documentNotes = it }, label = { Text("Document notes") }, modifier = Modifier.fillMaxWidth()) }
-                item {
-                    OutlinedButton(
-                        onClick = {
-                            if (extractedIdentifier.isNotBlank()) id = extractedIdentifier.trim()
-                            if (extractedFullName.isNotBlank()) fullName = extractedFullName.trim()
-                            if (extractedSex.isNotBlank()) sex = extractedSex.trim()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Apply extracted data")
-                    }
-                }
-                item { SectionHeader("Vitals at Registration") }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(weightKg, { weightKg = it.decimalInput() }, label = { Text("Weight kg") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(heightCm, { heightCm = it.decimalInput() }, label = { Text("Height cm") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(temperatureC, { temperatureC = it.decimalInput() }, label = { Text("Temp C") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(muacCm, { muacCm = it.decimalInput() }, label = { Text("MUAC cm") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(systolicBp, { systolicBp = it.digitsOnly() }, label = { Text("BP systolic") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(diastolicBp, { diastolicBp = it.digitsOnly() }, label = { Text("BP diastolic") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(pulseBpm, { pulseBpm = it.digitsOnly() }, label = { Text("Pulse") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(respiratoryRate, { respiratoryRate = it.digitsOnly() }, label = { Text("RR") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(spo2Percent, { spo2Percent = it.decimalInput() }, label = { Text("SpO2") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item { SectionHeader("Queue Routing") }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(queueDestination, { queueDestination = it }, label = { Text("Next step") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(queuePriority, { queuePriority = it }, label = { Text("Priority") }, modifier = Modifier.weight(1f))
-                    }
-                }
-                item { OutlinedTextField(queueNote, { queueNote = it }, label = { Text("Queue note") }, modifier = Modifier.fillMaxWidth()) }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val parsedAge = age.toIntOrNull()
-                    val parsedTriage = triageLevel.toIntOrNull()?.coerceIn(1, 5) ?: 3
-                    when {
-                        id.isBlank() -> validationError = "Patient ID is required."
-                        fullName.isBlank() -> validationError = "Full name is required."
-                        parsedAge == null -> validationError = "Age is required."
-                        else -> {
-                            val cleanId = id.trim()
-                            val clinical = RegistrationClinicalInput(
-                                weightKg = weightKg.toDoubleOrNull(),
-                                heightCm = heightCm.toDoubleOrNull(),
-                                temperatureC = temperatureC.toDoubleOrNull(),
-                                systolicBp = systolicBp.toLongOrNull(),
-                                diastolicBp = diastolicBp.toLongOrNull(),
-                                pulseBpm = pulseBpm.toLongOrNull(),
-                                respiratoryRate = respiratoryRate.toLongOrNull(),
-                                spo2Percent = spo2Percent.toDoubleOrNull(),
-                                muacCm = muacCm.toDoubleOrNull(),
-                                queueDestination = queueDestination.ifBlank { "Triage" },
-                                queuePriority = queuePriority.ifBlank { "Routine" },
-                                queueNote = queueNote.ifBlank { null }
-                            )
-                            val document = if (documentPhotoUri.isBlank()) {
-                                null
-                            } else {
-                                PatientDocumentInput(
-                                    documentId = "DOC-${Clock.System.now().toEpochMilliseconds()}-$cleanId",
-                                    patientId = cleanId,
-                                    documentType = documentType.ifBlank { "Unknown" },
-                                    imageUri = documentPhotoUri.trim(),
-                                    verificationStatus = verificationStatus.ifBlank { "PENDING_REVIEW" },
-                                    extractedFullName = extractedFullName.ifBlank { null },
-                                    extractedIdentifier = extractedIdentifier.ifBlank { null },
-                                    extractedBirthDate = extractedBirthDate.ifBlank { null },
-                                    extractedSex = extractedSex.ifBlank { null },
-                                    extractedGuardianName = extractedGuardianName.ifBlank { null },
-                                    notes = documentNotes.ifBlank { null }
-                                )
-                            }
-                            onRegister(
-                                PatientRegistrationInput(
-                                    id = cleanId,
-                                    fullName = fullName.trim(),
-                                    age = parsedAge,
-                                    sex = sex.toReceptionSex(),
-                                    assignedWard = assignedWard.ifBlank { null },
-                                    roomBed = roomBed.ifBlank { null },
-                                    acuity = acuity.ifBlank { "Moderate" },
-                                    isolation = isolation.ifBlank { null }
-                                ),
-                                parsedTriage,
-                                clinical,
-                                document
-                            )
-                        }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Navy800)
-            ) {
-                Text("Register")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
-
-private fun String.toReceptionSex(): Sex = when (trim().lowercase()) {
-    "m", "male" -> Sex.MALE
-    "f", "female" -> Sex.FEMALE
-    "intersex" -> Sex.INTERSEX
-    else -> Sex.UNKNOWN
-}
-
-private fun String.digitsOnly(): String = filter { it.isDigit() }
-
-private fun String.decimalInput(): String = filterIndexed { index, ch ->
-    ch.isDigit() || (ch == '.' && indexOf('.') == index)
-}
-
-private fun RegistrationClinicalInput.hasVitals(): Boolean =
-    listOf(weightKg, heightCm, temperatureC, systolicBp, diastolicBp, pulseBpm, respiratoryRate, spo2Percent, muacCm)
-        .any { it != null }
-
-private fun calculateBmi(weightKg: Double?, heightCm: Double?): Double? {
-    if (weightKg == null || heightCm == null || heightCm <= 0.0) return null
-    val meters = heightCm / 100.0
-    return kotlin.math.round((weightKg / (meters * meters)) * 10.0) / 10.0
 }
 
 @Composable
@@ -1072,13 +826,7 @@ private fun WardsScreen() {
 
         // â”€â”€ Bed board â€” 2-column grid using chunked Rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         item {
-            SectionHeader("Bed Board",
-                action = {
-                    TextButton(onClick = {}) {
-                        Text("Manage", style = MaterialTheme.typography.labelMedium, color = Navy800)
-                    }
-                }
-            )
+            SectionHeader("Bed Board")
             Spacer(Modifier.height(10.dp))
             // Chunked Rows avoid nested lazy layout crash
             beds!!.chunked(2).forEach { row ->
@@ -1240,7 +988,7 @@ private fun BedCell(bed: BedCard, modifier: Modifier = Modifier) {
 // ── Consultation ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun ConsultationScreen(localRepository: LocalRepository, session: SessionState) {
+private fun LegacyConsultationScreen(localRepository: LocalRepository, session: SessionState) {
     var patients   by remember { mutableStateOf<List<Patient>?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var showConsultForm by remember { mutableStateOf(false) }
@@ -1684,6 +1432,8 @@ private fun AppointmentsScreen(localRepository: LocalRepository, session: Sessio
     var selectedScheduleId by remember { mutableStateOf<String?>(null) }
     var search by remember { mutableStateOf("") }
     var showBookDialog by remember { mutableStateOf(false) }
+    var appointmentToDelete by remember { mutableStateOf<Appointment?>(null) }
+    var appointmentActionMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var refreshTrigger by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -1828,7 +1578,17 @@ private fun AppointmentsScreen(localRepository: LocalRepository, session: Sessio
                     }
 
                     Column(Modifier.weight(2f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SectionHeader("Appointment List")
+                        SectionHeader(
+                            "Appointment List",
+                            action = {
+                                TextButton(onClick = { showBookDialog = true }) {
+                                    Text("New", color = Navy800)
+                                }
+                            },
+                        )
+                        appointmentActionMessage?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = StatusStable)
+                        }
                         
                         val filteredAppts = appointments.filter { appt ->
                             val provider = schedules.find { it.id == appt.scheduleId }
@@ -1854,22 +1614,51 @@ private fun AppointmentsScreen(localRepository: LocalRepository, session: Sessio
                             val patientMap = patients.associateBy { it.id }
                             val providerMap = schedules.associateBy { it.id }
                             
-                            val headers = listOf("Patient", "Provider", "Time Slot", "Status")
-                            val rows = filteredAppts.map { appt ->
+                            filteredAppts.forEach { appt ->
                                 val patName = patientMap[appt.patientId]?.fullName ?: appt.patientId
-                                val provName = providerMap[appt.scheduleId]?.name?.substringBefore(" (") ?: "Unknown"
+                                val provName = providerMap[appt.scheduleId]?.name ?: "Unknown"
                                 val timeVal = appt.startTime.substringAfter(" ") + " - " + appt.endTime.substringAfter(" ")
                                 val dateVal = appt.startTime.substringBefore(" ")
-                                
-                                listOf(
-                                    "$patName\n($dateVal)",
-                                    provName,
-                                    timeVal,
-                                    appt.status.uppercase()
-                                )
+                                val isCancelled = appt.status.equals("cancelled", ignoreCase = true)
+
+                                ClinicCard(Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(patName, style = MaterialTheme.typography.titleSmall, color = Slate900)
+                                                Text("$dateVal · $timeVal", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                                                Text(provName, style = MaterialTheme.typography.bodySmall, color = Slate600)
+                                                appt.reason?.let {
+                                                    Text(it, style = MaterialTheme.typography.labelSmall, color = Slate400)
+                                                }
+                                            }
+                                            TextBadge(appt.status.uppercase(), Navy800, Navy50)
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        localRepository.updateAppointmentStatus(appt.id, "cancelled")
+                                                        appointmentActionMessage = "Cancelled appointment for $patName."
+                                                        refreshTrigger++
+                                                    }
+                                                },
+                                                enabled = !isCancelled,
+                                                modifier = Modifier.weight(1f),
+                                                shape = MaterialTheme.shapes.small,
+                                            ) {
+                                                Text("Cancel", fontSize = 12.sp)
+                                            }
+                                            DestructiveTextButton(
+                                                label = "Delete",
+                                                onClick = { appointmentToDelete = appt },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
                             }
-                            
-                            CompactDataTable(headers = headers, rows = rows)
                         }
                     }
                 }
@@ -1887,6 +1676,31 @@ private fun AppointmentsScreen(localRepository: LocalRepository, session: Sessio
                 showBookDialog = false
                 refreshTrigger++
             }
+        )
+    }
+
+    appointmentToDelete?.let { appt ->
+        val patName = patients.find { it.id == appt.patientId }?.fullName ?: appt.patientId
+        AlertDialog(
+            onDismissRequest = { appointmentToDelete = null },
+            title = { Text("Delete appointment?") },
+            text = { Text("Remove the booking for $patName on ${appt.startTime}.") },
+            confirmButton = {
+                DestructiveTextButton(
+                    label = "Delete",
+                    onClick = {
+                        scope.launch {
+                            localRepository.deleteAppointment(appt.id)
+                            appointmentActionMessage = "Appointment deleted."
+                            appointmentToDelete = null
+                            refreshTrigger++
+                        }
+                    },
+                )
+            },
+            dismissButton = {
+                TextButton(onClick = { appointmentToDelete = null }) { Text("Cancel") }
+            },
         )
     }
 }

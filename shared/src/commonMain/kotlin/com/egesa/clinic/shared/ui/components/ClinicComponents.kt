@@ -424,6 +424,59 @@ fun EmptyStateCard(
 }
 
 @Composable
+fun FormActionRow(
+    cancelLabel: String,
+    onCancel: () -> Unit,
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    modifier: Modifier = Modifier,
+    primaryEnabled: Boolean = true,
+    cancelEnabled: Boolean = true,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = cancelEnabled,
+            modifier = Modifier.weight(1f),
+            shape = MaterialTheme.shapes.small,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate700),
+        ) {
+            Text(cancelLabel, style = MaterialTheme.typography.labelMedium)
+        }
+        Button(
+            onClick = onPrimary,
+            enabled = primaryEnabled,
+            modifier = Modifier.weight(1f),
+            shape = MaterialTheme.shapes.small,
+            colors = ButtonDefaults.buttonColors(containerColor = Navy800),
+        ) {
+            Text(primaryLabel, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+fun DestructiveTextButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        colors = ButtonDefaults.textButtonColors(contentColor = StatusCritical),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Composable
 fun QuickActionButton(
     label: String,
     modifier: Modifier = Modifier,

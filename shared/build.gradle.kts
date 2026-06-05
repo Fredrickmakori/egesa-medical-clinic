@@ -53,6 +53,12 @@ kotlin {
     }
 
     sourceSets {
+        val mobileMain by creating {
+            dependsOn(commonMain.get())
+        }
+        androidMain.get().dependsOn(mobileMain)
+        findByName("iosMain")?.dependsOn(mobileMain)
+
         commonMain.dependencies {
             implementation(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines)
@@ -74,6 +80,11 @@ kotlin {
             dependencies {
                 implementation(libs.ktor.client.java)
                 implementation(libs.sqldelight.sqlite.driver)
+            }
+        }
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
             }
         }
         androidMain.dependencies {

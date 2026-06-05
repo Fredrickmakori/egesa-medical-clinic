@@ -18,6 +18,8 @@ import com.egesa.clinic.shared.data.ClinicalSyncBatchDto
 import com.egesa.clinic.shared.data.ConflictResolutionRequestDto
 import com.egesa.clinic.shared.data.ConflictResolutionResultDto
 import com.egesa.clinic.shared.data.DashboardMetricDto
+import com.egesa.clinic.shared.data.LabOrderDto
+import com.egesa.clinic.shared.data.LabResultDto
 import com.egesa.clinic.shared.data.NursingTaskDto
 import com.egesa.clinic.shared.data.PatientDto
 import com.egesa.clinic.shared.data.PatientRegistrationDto
@@ -25,14 +27,17 @@ import com.egesa.clinic.shared.data.PatientRegistrationResponseDto
 import com.egesa.clinic.shared.data.QueueCheckInRequestDto
 import com.egesa.clinic.shared.data.QueueItemDto
 import com.egesa.clinic.shared.data.StaffMemberDto
+import com.egesa.clinic.shared.data.SaveLabResultsRequestDto
 import com.egesa.clinic.shared.data.SyncPatientDataDto
 import com.egesa.clinic.shared.data.SyncResultItemDto
 import com.egesa.clinic.shared.data.TrendPointDto
+import com.egesa.clinic.shared.data.UpdateLabOrderStatusRequestDto
 import com.egesa.clinic.shared.data.WardCensusRowDto
 import com.egesa.clinic.shared.data.WardOverviewDto
 import com.egesa.clinic.shared.data.toDto
 import com.egesa.clinic.shared.data.toDomain
 import com.egesa.clinic.shared.data.toPatient
+import com.egesa.clinic.shared.domain.OpdEncounterBundle
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -62,6 +67,9 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
+private val labOrdersStore = mutableMapOf<String, LabOrderDto>()
+private val labResultsStore = mutableMapOf<String, MutableList<LabResultDto>>()
+
 fun main() {
     embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::hospitalApi).start(wait = true)
 }
@@ -71,6 +79,7 @@ fun Application.hospitalApi() {
     val mpesaService = MpesaService()
     val persistence = SupabasePersistence.fromEnvironment()
     val notificationService = NotificationService()
+    val encounterStore = mutableMapOf<String, OpdEncounterBundle>()
     val reconciliationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     reconciliationScope.launch {
@@ -338,6 +347,98 @@ fun Application.hospitalApi() {
                 call.respond(state.shiftHandoffSummary(shift))
             }
 
+            post("/api/lab/orders") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!hasAnyPermission(principal, Permission.CONSULTATION_WRITE, Permission.LAB_RESULT_MANAGE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Lab order creation denied"))
+                    return@post
+                }
+                val request = runCatching { call.receive<LabOrderDto>() }.getOrElse {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid lab order payload"))
+                    return@post
+                }
+                labOrdersStore[request.id] = request
+                call.respond(HttpStatusCode.Created, request)
+            }
+
+            get("/api/lab/orders/{id}") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Lab order read access denied"))
+                    return@get
+                }
+                val id = call.parameters["id"].orEmpty()
+                val order = labOrdersStore[id]
+                if (order == null) call.respond(HttpStatusCode.NotFound, mapOf("error" to "Lab order not found"))
+                else call.respond(order)
+            }
+
+            get("/api/patients/{patientId}/lab-orders") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Lab order read access denied"))
+                    return@get
+                }
+                val patientId = call.parameters["patientId"].orEmpty()
+                val orders = labOrdersStore.values.filter { it.patientId == patientId }.sortedByDescending { it.createdAt }
+                call.respond(orders)
+            }
+
+            get("/api/lab/worklist") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.LAB_RESULT_MANAGE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Lab worklist access denied"))
+                    return@get
+                }
+                val department = call.request.queryParameters["department"].orEmpty()
+                val status = call.request.queryParameters["status"]
+                if (department.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "department is required"))
+                    return@get
+                }
+                val filtered = labOrdersStore.values
+                    .filter { it.department.equals(department, ignoreCase = true) }
+                    .filter { status.isNullOrBlank() || it.status == status }
+                    .sortedBy { it.priority }
+                call.respond(filtered)
+            }
+
+            post("/api/lab/results") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.LAB_RESULT_MANAGE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Lab result entry denied"))
+                    return@post
+                }
+                val request = runCatching { call.receive<SaveLabResultsRequestDto>() }.getOrElse {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid lab result payload"))
+                    return@post
+                }
+                val existing = labResultsStore.getOrPut(request.orderId) { mutableListOf() }
+                existing += request.results
+                call.respond(existing.toList())
+            }
+
+            post("/api/lab/orders/{id}/status") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.LAB_RESULT_MANAGE)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Lab status update denied"))
+                    return@post
+                }
+                val id = call.parameters["id"].orEmpty()
+                val request = runCatching { call.receive<UpdateLabOrderStatusRequestDto>() }.getOrElse {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid status payload"))
+                    return@post
+                }
+                val existing = labOrdersStore[id]
+                if (existing == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Lab order not found"))
+                    return@post
+                }
+                val updated = existing.copy(status = request.status, updatedAt = kotlinx.datetime.Clock.System.now().toString())
+                labOrdersStore[id] = updated
+                call.respond(updated)
+            }
+
             // ── Payment endpoints with permission checks ────────────────────────────
             post("/payments/stk-push") {
                 val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
@@ -515,6 +616,68 @@ fun Application.hospitalApi() {
                         finalVersion = maxOf(req.localVersion, req.remoteVersion)
                     )
                 )
+            }
+
+            post("/api/encounters") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.CONSULTATION_WRITE)) {
+                    logDenied(persistence, state, principal, Permission.CONSULTATION_WRITE, "Consultation", "POST /api/encounters")
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Consultation write access denied"))
+                    return@post
+                }
+                val bundle = runCatching { call.receive<OpdEncounterBundle>() }
+                    .getOrElse {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid encounter payload"))
+                        return@post
+                    }
+                encounterStore[bundle.encounter.encounterId] = bundle
+                logAudit(
+                    persistence,
+                    state,
+                    principal?.name().orEmpty(),
+                    principal?.userId().orEmpty(),
+                    "ENCOUNTER_UPSERT",
+                    "Consultation",
+                    bundle.encounter.encounterId,
+                    Permission.CONSULTATION_WRITE,
+                    true
+                )
+                call.respond(HttpStatusCode.Created, bundle)
+            }
+
+            get("/api/encounters/{id}") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    logDenied(persistence, state, principal, Permission.PATIENT_READ, "Consultation", "GET /api/encounters/{id}")
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Consultation read access denied"))
+                    return@get
+                }
+                val id = call.parameters["id"].orEmpty()
+                if (id.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Encounter id is required"))
+                    return@get
+                }
+                val encounter = encounterStore[id]
+                if (encounter == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Encounter not found"))
+                    return@get
+                }
+                call.respond(encounter)
+            }
+
+            get("/api/patients/{patientId}/encounters") {
+                val principal = call.principal<io.ktor.server.auth.jwt.JWTPrincipal>()
+                if (!requirePermission(principal, Permission.PATIENT_READ)) {
+                    logDenied(persistence, state, principal, Permission.PATIENT_READ, "Consultation", "GET /api/patients/{patientId}/encounters")
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Consultation read access denied"))
+                    return@get
+                }
+                val patientId = call.parameters["patientId"].orEmpty()
+                if (patientId.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Patient id is required"))
+                    return@get
+                }
+                call.respond(encounterStore.values.filter { it.encounter.patientId == patientId })
             }
         }
         get("/scope") {

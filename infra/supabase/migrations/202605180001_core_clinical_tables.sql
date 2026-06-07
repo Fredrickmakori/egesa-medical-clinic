@@ -16,6 +16,8 @@ create table if not exists public.vital_signs (
   vital_signs_id text primary key,
   encounter_id text not null references public.encounters(encounter_id) on delete cascade,
   weight_kg numeric(6,2),
+  height_cm numeric(6,2),
+  bmi numeric(5,2),
   temperature_c numeric(4,1),
   systolic_bp integer,
   diastolic_bp integer,

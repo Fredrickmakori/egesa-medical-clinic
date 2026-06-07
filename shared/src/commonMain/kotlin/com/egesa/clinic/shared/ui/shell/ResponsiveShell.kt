@@ -1,4 +1,4 @@
-package com.egesa.clinic.shared.ui.shell
+﻿package com.egesa.clinic.shared.ui.shell
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -6,7 +6,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,13 +24,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.WorkflowArea
+import com.egesa.clinic.shared.data.DocumentCaptureGateway
 import com.egesa.clinic.shared.data.LocalRepository
+import com.egesa.clinic.shared.data.NoopDocumentCaptureGateway
 import com.egesa.clinic.shared.ui.components.Avatar
 import com.egesa.clinic.shared.ui.components.RoleBadge
+import com.egesa.clinic.shared.ui.components.SyncStatusIndicator
+import com.egesa.clinic.shared.ui.mobile.CompactMobileShell
+import com.egesa.clinic.shared.ui.mobile.MobileGlobalSearchBox
+import com.egesa.clinic.shared.ui.mobile.areaIcon
+import com.egesa.clinic.shared.ui.mobile.displayName
 import com.egesa.clinic.shared.ui.navigation.ClinicNavItem
 import com.egesa.clinic.shared.ui.navigation.SessionState
-import com.egesa.clinic.shared.ui.navigation.initials
 import com.egesa.clinic.shared.ui.navigation.navItemsFor
+import com.egesa.clinic.shared.ui.navigation.roleCanAccessArea
+import com.egesa.clinic.shared.ui.navigation.safeDefaultLandingArea
 import com.egesa.clinic.shared.ui.responsive.*
 import com.egesa.clinic.shared.ui.screens.AreaScreen
 import com.egesa.clinic.shared.ui.theme.*
@@ -36,29 +50,41 @@ import com.egesa.clinic.shared.ui.theme.*
  * - EXPANDED: Desktop view with full sidebar
  */
 @Composable
-fun ResponsiveShell(session: SessionState, localRepository: LocalRepository, onLogout: () -> Unit) {
-    val windowSize = currentWindowSizeClass()
+fun ResponsiveShell(
+    session: SessionState,
+    localRepository: LocalRepository,
+    documentCaptureGateway: DocumentCaptureGateway = NoopDocumentCaptureGateway,
+    onLogout: () -> Unit
+) {
     val shouldShowSidebar = shouldShowSidebar()
     val shouldUseCompact = shouldUseCompactUI()
     val navItems = remember(session.role) { navItemsFor(session.role) }
-    
-    var activeArea by remember { mutableStateOf(navItems.firstOrNull()?.area ?: WorkflowArea.DASHBOARD) }
+    val landingArea = remember(session.role) { safeDefaultLandingArea(session.role) }
+
+    var activeArea by remember(session.role) { mutableStateOf(landingArea) }
     var sidebarOpen by remember { mutableStateOf(true) }
-    var bottomNavVisible by remember { mutableStateOf(true) }
+
+    LaunchedEffect(session.role, navItems) {
+        if (navItems.isEmpty()) return@LaunchedEffect
+        if (!roleCanAccessArea(session.role, activeArea)) {
+            activeArea = landingArea
+        }
+    }
 
     when {
         shouldUseCompact -> CompactMobileShell(
             session = session,
             localRepository = localRepository,
+            documentCaptureGateway = documentCaptureGateway,
             navItems = navItems,
             activeArea = activeArea,
             onAreaSelected = { activeArea = it },
-            bottomNavVisible = bottomNavVisible,
             onLogout = onLogout,
         )
         shouldShowSidebar -> AdaptiveDesktopShell(
             session = session,
             localRepository = localRepository,
+            documentCaptureGateway = documentCaptureGateway,
             navItems = navItems,
             activeArea = activeArea,
             onAreaSelected = { activeArea = it },
@@ -69,62 +95,20 @@ fun ResponsiveShell(session: SessionState, localRepository: LocalRepository, onL
         else -> CompactMobileShell(
             session = session,
             localRepository = localRepository,
+            documentCaptureGateway = documentCaptureGateway,
             navItems = navItems,
             activeArea = activeArea,
             onAreaSelected = { activeArea = it },
-            bottomNavVisible = bottomNavVisible,
             onLogout = onLogout,
         )
     }
 }
 
-/**
- * Compact mobile shell with bottom navigation
- * Used on COMPACT screen sizes (phones < 600 dp width)
- */
-@Composable
-private fun CompactMobileShell(
-    session: SessionState,
-    localRepository: LocalRepository,
-    navItems: List<ClinicNavItem>,
-    activeArea: WorkflowArea,
-    onAreaSelected: (WorkflowArea) -> Unit,
-    bottomNavVisible: Boolean,
-    onLogout: () -> Unit,
-) {
-    Column(Modifier.fillMaxSize()) {
-        // ── Header ──────────────────────────────────────────────────────────────
-        MobileTopBar(session = session, activeArea = activeArea, onLogout = onLogout)
-        HorizontalDivider(color = Slate200, thickness = 1.dp)
-
-        // ── Content ─────────────────────────────────────────────────────────────
-        Box(
-            Modifier.weight(1f).fillMaxWidth().background(Slate50),
-            contentAlignment = Alignment.TopStart,
-        ) {
-            AreaScreen(area = activeArea, session = session, localRepository = localRepository)
-        }
-
-        // ── Bottom Navigation ───────────────────────────────────────────────────
-        if (bottomNavVisible) {
-            HorizontalDivider(color = Slate200, thickness = 1.dp)
-            BottomNavigationBar(
-                items = navItems,
-                activeArea = activeArea,
-                onAreaSelected = onAreaSelected,
-            )
-        }
-    }
-}
-
-/**
- * Adaptive desktop shell with sidebar
- * Used on MEDIUM (600-839 dp) and EXPANDED (>= 840 dp) screen sizes
- */
 @Composable
 private fun AdaptiveDesktopShell(
     session: SessionState,
     localRepository: LocalRepository,
+    documentCaptureGateway: DocumentCaptureGateway,
     navItems: List<ClinicNavItem>,
     activeArea: WorkflowArea,
     onAreaSelected: (WorkflowArea) -> Unit,
@@ -139,7 +123,6 @@ private fun AdaptiveDesktopShell(
     )
 
     Row(Modifier.fillMaxSize()) {
-        // ── Sidebar ────────────────────────────────────────────────────────────
         AdaptiveSidebar(
             items = navItems,
             activeArea = activeArea,
@@ -152,7 +135,6 @@ private fun AdaptiveDesktopShell(
             modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
         )
 
-        // ── Main content ───────────────────────────────────────────────────────
         Column(Modifier.weight(1f).fillMaxHeight()) {
             DesktopTopBar(activeArea = activeArea, session = session)
             HorizontalDivider(color = Slate200, thickness = 1.dp)
@@ -160,79 +142,58 @@ private fun AdaptiveDesktopShell(
                 Modifier.weight(1f).fillMaxWidth().background(Slate50),
                 contentAlignment = Alignment.TopStart,
             ) {
-                AreaScreen(area = activeArea, session = session, localRepository = localRepository)
+                AreaScreen(
+                    area = activeArea,
+                    session = session,
+                    localRepository = localRepository,
+                    documentCaptureGateway = documentCaptureGateway
+                )
             }
         }
     }
 }
 
-// ── Mobile Top Bar ──────────────────────────────────────────────────────────
-
-@Composable
-private fun MobileTopBar(
-    session: SessionState,
-    activeArea: WorkflowArea,
-    onLogout: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().height(56.dp).background(White).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column {
-            Text("EGESA", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Navy800)
-            Text("CLINIC", fontSize = 8.sp, color = Navy400)
-        }
-        Text(
-            activeArea.name.lowercase().replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.labelMedium,
-            color = Slate700,
-        )
-        Box(
-            Modifier.size(32.dp).clip(RoundedCornerShape(6.dp))
-                .background(Navy100).clickable(onClick = onLogout),
-            contentAlignment = Alignment.Center,
-        ) {
-            Avatar(initials = session.initials, size = 28, bg = Navy600)
-        }
-    }
-}
-
-// ── Desktop Top Bar ─────────────────────────────────────────────────────────
-
 @Composable
 private fun DesktopTopBar(activeArea: WorkflowArea, session: SessionState) {
+    var search by remember { mutableStateOf("") }
     Row(
-        Modifier.fillMaxWidth().height(56.dp).background(White).padding(horizontal = 20.dp),
+        Modifier.fillMaxWidth().height(64.dp).background(White).padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Breadcrumb
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text("Home", style = MaterialTheme.typography.bodySmall, color = Slate400)
-            Text("›", color = Slate300, fontSize = 12.sp)
+            Icon(areaIcon(activeArea), contentDescription = null, tint = Indigo700, modifier = Modifier.size(20.dp))
+            Text("HIMS", style = MaterialTheme.typography.bodySmall, color = Slate400)
             Text(
-                activeArea.name.lowercase().replaceFirstChar { it.uppercase() },
+                activeArea.displayName(),
                 style = MaterialTheme.typography.labelLarge,
                 color = Slate700,
             )
         }
 
-        // Right actions
+        MobileGlobalSearchBox(
+            value = search,
+            onValueChange = { search = it },
+            session = session,
+            modifier = Modifier.widthIn(min = 280.dp, max = 420.dp),
+            placeholder = "Search patient, queue, invoice",
+        )
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Text("Egesa Clinic / ${session.shiftLabel}", style = MaterialTheme.typography.bodySmall, color = Slate500)
+            SyncStatusIndicator(session.syncStatus, showLabel = false)
+            Icon(Icons.Filled.Notifications, contentDescription = "Notifications", tint = Slate500, modifier = Modifier.size(20.dp))
             RoleBadge(session.role.name)
-            Avatar(initials = session.initials, size = 32, bg = Navy700)
+            Avatar(initials = session.initials, size = 32, bg = Indigo700)
         }
     }
 }
-
-// ── Adaptive Sidebar ────────────────────────────────────────────────────────
 
 @Composable
 private fun AdaptiveSidebar(
@@ -247,7 +208,6 @@ private fun AdaptiveSidebar(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.background(SidebarBg)) {
-        // Logo row
         Row(
             Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -261,27 +221,47 @@ private fun AdaptiveSidebar(
                 }
             }
             IconButton(onClick = onToggle, modifier = Modifier.size(32.dp)) {
-                Text(if (expanded) "«" else "»", color = Navy200, fontSize = 14.sp)
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.ChevronLeft else Icons.Filled.ChevronRight,
+                    contentDescription = if (expanded) "Collapse sidebar" else "Expand sidebar",
+                    tint = Navy200,
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
 
         HorizontalDivider(color = SidebarBorder, thickness = 1.dp)
         Spacer(Modifier.height(8.dp))
 
-        // Nav items
-        items.forEach { item ->
-            SidebarItem(
-                item = item,
-                selected = activeArea == item.area,
-                expanded = expanded,
-                onClick = { onSelect(item.area) },
-            )
+        LazyColumn(Modifier.weight(1f)) {
+            items.groupBy { it.group }.forEach { (group, groupedItems) ->
+                item {
+                    if (expanded) {
+                        Text(
+                            group.uppercase(),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Navy200,
+                        )
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+                groupedItems.forEach { navItem ->
+                    item {
+                        SidebarItem(
+                            item = navItem,
+                            selected = activeArea == navItem.area,
+                            expanded = expanded,
+                            onClick = { onSelect(navItem.area) },
+                        )
+                    }
+                }
+            }
         }
 
-        Spacer(Modifier.weight(1f))
         HorizontalDivider(color = SidebarBorder, thickness = 1.dp)
 
-        // User row
         Row(
             Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -301,7 +281,7 @@ private fun AdaptiveSidebar(
                         .background(SidebarActive).clickable(onClick = onLogout),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("⏻", color = Navy200, fontSize = 12.sp)
+                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log out", tint = Navy200, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -338,12 +318,11 @@ private fun SidebarItem(
                     .background(if (selected) Teal600.copy(alpha = 0.25f) else Color.Transparent),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    item.shortLabel.take(2),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (selected) Teal500 else Navy200,
-                    letterSpacing = 0.5.sp,
+                Icon(
+                    areaIcon(item.area),
+                    contentDescription = item.label,
+                    tint = if (selected) Teal500 else Navy200,
+                    modifier = Modifier.size(16.dp),
                 )
             }
         }
@@ -358,57 +337,3 @@ private fun SidebarItem(
         }
     }
 }
-
-// ── Bottom Navigation Bar ───────────────────────────────────────────────────
-
-@Composable
-private fun BottomNavigationBar(
-    items: List<ClinicNavItem>,
-    activeArea: WorkflowArea,
-    onAreaSelected: (WorkflowArea) -> Unit,
-) {
-    NavigationBar(
-        modifier = Modifier.fillMaxWidth().height(80.dp),
-        containerColor = White,
-        tonalElevation = 1.dp,
-    ) {
-        items.forEach { item ->
-            NavigationBarItem(
-                icon = {
-                    Box(
-                        Modifier.size(24.dp).clip(RoundedCornerShape(4.dp))
-                            .background(
-                                if (activeArea == item.area) Teal200 else Color.Transparent
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            item.shortLabel.take(1),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (activeArea == item.area) Teal700 else Navy400,
-                        )
-                    }
-                },
-                label = {
-                    Text(
-                        item.shortLabel,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                selected = activeArea == item.area,
-                onClick = { onAreaSelected(item.area) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Teal700,
-                    selectedTextColor = Teal700,
-                    unselectedIconColor = Navy400,
-                    unselectedTextColor = Navy400,
-                    indicatorColor = Color.Transparent,
-                ),
-            )
-        }
-    }
-}
-

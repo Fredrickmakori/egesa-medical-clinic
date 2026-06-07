@@ -19,8 +19,9 @@ import com.egesa.clinic.shared.ui.components.Avatar
 import com.egesa.clinic.shared.ui.components.RoleBadge
 import com.egesa.clinic.shared.ui.navigation.ClinicNavItem
 import com.egesa.clinic.shared.ui.navigation.SessionState
-import com.egesa.clinic.shared.ui.navigation.initials
+import com.egesa.clinic.shared.ui.navigation.safeDefaultLandingArea
 import com.egesa.clinic.shared.ui.navigation.navItemsFor
+import com.egesa.clinic.shared.ui.navigation.roleCanAccessArea
 import com.egesa.clinic.shared.ui.screens.AreaScreen
 import com.egesa.clinic.shared.ui.theme.*
 
@@ -30,9 +31,17 @@ private const val BOTTOM_NAV_LIMIT = 4
 @Composable
 fun TabletShell(session: SessionState, localRepository: LocalRepository, onLogout: () -> Unit) {
     val navItems     = remember(session.role) { navItemsFor(session.role) }
+    val landingArea  = remember(session.role) { safeDefaultLandingArea(session.role) }
     val primaryItems = navItems.take(BOTTOM_NAV_LIMIT)
-    var activeArea   by remember { mutableStateOf(navItems.first().area) }
+    var activeArea   by remember(session.role) { mutableStateOf(landingArea) }
     var drawerOpen   by remember { mutableStateOf(false) }
+
+    LaunchedEffect(session.role, navItems) {
+        if (navItems.isEmpty()) return@LaunchedEffect
+        if (!roleCanAccessArea(session.role, activeArea)) {
+            activeArea = landingArea
+        }
+    }
 
     Scaffold(
         topBar = {

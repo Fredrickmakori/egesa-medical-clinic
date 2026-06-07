@@ -1,7 +1,7 @@
 [versions]
-kotlin = "2.0.21"
+kotlin = "2.1.10"
 compose = "1.7.0"
-agp = "8.7.3"
+agp = "9.2.1"
 kotlinxSerialization = "1.7.1"
 kotlinxDatetime = "0.6.0"
 kotlinxCoroutines = "1.8.1"

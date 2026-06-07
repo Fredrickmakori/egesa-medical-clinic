@@ -7,12 +7,71 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(21)
-    androidTarget()
-    jvm("desktop")
+    applyDefaultHierarchyTemplate()
+    androidTarget {
+    }
+    jvm()
+
+    wasmJs {
+        browser {
+            commonWebpackConfig {
+                outputFileName = "shared.js"
+                devServer = (devServer ?: org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig.DevServer()).apply {
+                    open = true
+                    // Disable overlay to prevent ReferenceError: document is not defined in Web Workers
+                    client = org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig.DevServer.Client(
+                        overlay = false
+                    )
+                }
+            }
+        }
+        binaries.executable()
+    }
+
+    // iOS targets require a macOS host for building/running.
+    // On Windows/Linux, keeping these enabled can break IDE import/sync (appleMain/iosMain resolvers).
+    val enableIos = (findProperty("enableIos") as? String)?.equals("true", ignoreCase = true) == true
+    val isMacHost = System.getProperty("os.name").contains("Mac", ignoreCase = true)
+    if (enableIos || isMacHost) {
+        iosX64()
+        iosArm64()
+        iosSimulatorArm64()
+    }
+
+    targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
+        if (name.startsWith("ios")) {
+            binaries.framework {
+                baseName = "shared"
+                isStatic = true
+            }
+        }
+    }
 
     sourceSets {
-        val commonMain by getting {
+        val mobileMain by creating {
+            dependsOn(commonMain.get())
+        }
+        androidMain.get().dependsOn(mobileMain)
+        findByName("iosMain")?.dependsOn(mobileMain)
+
+        commonMain.dependencies {
+            implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines)
+            implementation(libs.sqldelight.async)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            @Suppress("DEPRECATION") implementation(compose.material3)
+            implementation(compose.ui)
+            implementation(compose.components.resources)
+            implementation(compose.materialIconsExtended)
+        }
+        val jvmMain by getting {
             dependencies {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
@@ -28,12 +87,19 @@ kotlin {
                 implementation("app.cash.sqldelight:async-extensions:2.0.2")
             }
         }
-        val androidMain by getting {
+        val commonTest by getting {
             dependencies {
-                implementation("androidx.compose.ui:ui:1.7.5")
-                implementation("app.cash.sqldelight:android-driver:2.0.2")
-                implementation("io.ktor:ktor-client-android:2.3.12")
+                implementation(kotlin("test"))
             }
+        }
+        androidMain.dependencies {
+            implementation(libs.ktor.client.okhttp)
+            implementation(libs.kotlinx.coroutines.android)
+            implementation(libs.sqldelight.android.driver)
+        }
+        findByName("iosMain")?.dependencies {
+            implementation(libs.ktor.client.darwin)
+            implementation(libs.sqldelight.native.driver)
         }
         val desktopMain by getting {
             dependencies {

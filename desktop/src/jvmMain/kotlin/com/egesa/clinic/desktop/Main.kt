@@ -401,3 +401,33 @@ private fun PrintableWardCensusAndHandoff(state: HospitalState) {
         }
     }
 }
+
+private object DesktopDocumentCaptureGateway : DocumentCaptureGateway {
+    override val canCapturePhoto: Boolean = false
+    override val canAttachImage: Boolean = true
+
+    override suspend fun capturePhoto(documentType: String): DocumentCaptureResult =
+        DocumentCaptureResult(message = "Camera capture is only available on supported tablet devices.")
+
+    override suspend fun attachImage(documentType: String): DocumentCaptureResult {
+        val dialog = FileDialog(null as Frame?, "Attach $documentType image", FileDialog.LOAD)
+        dialog.isVisible = true
+        val file = dialog.file
+        val directory = dialog.directory
+        dialog.dispose()
+        return if (file == null || directory == null) {
+            DocumentCaptureResult(message = "No document image selected.")
+        } else {
+            DocumentCaptureResult(
+                imageUri = java.io.File(directory, file).absolutePath,
+                message = "Document image attached. Review or extract document data before registering."
+            )
+        }
+    }
+
+    override suspend fun extractData(imageUri: String, documentType: String): DocumentCaptureResult =
+        DocumentCaptureResult(
+            imageUri = imageUri,
+            message = "Image saved for verification. OCR extraction is ready to connect to the configured OCR service."
+        )
+}

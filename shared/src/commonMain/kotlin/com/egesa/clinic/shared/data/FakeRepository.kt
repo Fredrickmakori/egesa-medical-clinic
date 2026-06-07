@@ -1,7 +1,11 @@
 package com.egesa.clinic.shared.data
 
 import com.egesa.clinic.shared.*
+import com.egesa.clinic.shared.domain.LabOrder
+import com.egesa.clinic.shared.domain.LabOrderStatus
+import com.egesa.clinic.shared.domain.LabResult
 import com.egesa.clinic.shared.sync.SyncHealthStatus
+import com.egesa.clinic.shared.domain.OpdEncounterBundle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 
@@ -13,90 +17,155 @@ object FakeRepository {
     /**
      * Enable local mock fallback for development and offline testing.
      */
-    var useMockFallback: Boolean = false
+    var useMockFallback: Boolean = true
+
+    private var clinicApi: ClinicApi? = null
+
+    fun clearAccessToken() = ClinicAuth.clearAccessToken()
+
+    fun restoreAccessToken(token: String?) = ClinicAuth.setAccessToken(token)
 
     /**
      * Source of truth for non-production builds is a seeded fixture so login works offline/demo-first.
      * When backend integration is ready, replace with GET /staff and keep this as fallback data.
      */
-    suspend fun getStaff(): List<StaffMember> {
+    suspend fun getStaff(): List<StaffMember> = apiOrFallback({
+        it.getStaff().map { staff -> staff.toDomain() }
+    }) {
         delay(300)
-        return STAFF_MEMBERS
+        STAFF_MEMBERS
     }
+
+    suspend fun getMockStaff(): List<StaffMember> = getStaff()
 
     fun installClinicApi(api: ClinicApi) {
         clinicApi = api
     }
 
-    private fun requireApi(): ClinicApi = clinicApi ?: error("ClinicApi is not configured. Call FakeRepository.installClinicApi(...) during app startup.")
-
     // ── Staff ──────────────────────────────────────────────────────────────────
 
-    suspend fun validatePin(staffId: String, pin: String): Boolean = apiOrFallback({
-        requireApi().validatePin(staffId, pin).authenticated
-    }) {
-        pin.length >= 4
+    suspend fun login(staffId: String, pin: String): Result<LoginResponseDto> = runResultOrFallback(
+        apiCall = {
+            val response = it.login(staffId, pin)
+            ClinicAuth.setAccessToken(response.accessToken)
+            response
+        },
+        fallback = {
+            if (pin.length < 4) throw IllegalArgumentException("Invalid PIN")
+            // Demo-only token. In production, useMockFallback must be false.
+            val response = LoginResponseDto(
+                accessToken = "demo-token",
+                expiresAtEpochSeconds = (Clock.System.now().epochSeconds + 8 * 60 * 60),
+                role = UserRole.ADMIN.name,
+                staffName = "Demo User"
+            )
+            ClinicAuth.setAccessToken(response.accessToken)
+            response
+        }
+    )
+
+    suspend fun validatePin(staffId: String, pin: String): Boolean {
+        return login(staffId, pin).isSuccess
     }
 
     suspend fun getPatients(): List<Patient> = apiOrFallback({
-        requireApi().getPatients().map { it.toDomain() }
+        it.getPatients().map { it.toDomain() }
     }) { db.allPatients() }
 
     suspend fun getPatient(id: String): Patient? = apiOrFallback({
-        requireApi().getPatient(id)?.toDomain()
+        it.getPatient(id)?.toDomain()
     }) { db.allPatients().find { it.id == id } }
 
     suspend fun getQueue(): List<QueueItem> = apiOrFallback({
-        requireApi().getQueue().map { it.toDomain() }
+        it.getQueue().map { it.toDomain() }
     }) { db.receptionQueue() }
 
+    suspend fun registerPatient(input: PatientRegistrationInput, triageLevel: Int): Result<PatientRegistrationResponseDto> = runResultOrFallback({
+        it.registerPatient(input.toRegistrationDto(triageLevel))
+    }) {
+        val patient = db.registerPatient(
+            Patient(
+                id = input.id,
+                fullName = input.fullName,
+                age = input.age,
+                sex = input.sex,
+                status = input.status,
+                assignedWard = input.assignedWard,
+                roomBed = input.roomBed,
+                acuity = input.acuity,
+                isolation = input.isolation
+            )
+        )
+        val queueItem = db.checkInPatient(patient.id, patient.fullName, triageLevel)
+        PatientRegistrationResponseDto(patient.toDto(), queueItem.toDto())
+    }
+
+    suspend fun checkInPatient(patient: Patient, triageLevel: Int): Result<QueueItem> = runResultOrFallback({
+        it.checkInPatient(QueueCheckInRequestDto(patient.id, patient.fullName, triageLevel)).toDomain()
+    }) {
+        db.registerPatient(patient)
+        db.checkInPatient(patient.id, patient.fullName, triageLevel)
+    }
+
+    suspend fun checkOutPatient(patientId: String): Result<QueueItem> = runResultOrFallback({
+        it.checkOutPatient(patientId).toDomain()
+    }) {
+        db.checkOutPatient(patientId) ?: throw IllegalArgumentException("Patient is not in the active queue")
+    }
+
     suspend fun getKpis(): List<DashboardMetric> = apiOrFallback({
-        requireApi().getKpis().map { it.toDomain() }
+        it.getKpis().map { it.toDomain() }
     }) { db.adminKpis() }
 
     suspend fun getBottlenecks(): List<BottleneckCell> = apiOrFallback({
-        requireApi().getBottlenecks().map { it.toDomain() }
+        it.getBottlenecks().map { it.toDomain() }
     }) { db.bottleneckHeatmap() }
 
     suspend fun getRegistrationTrend(): List<TrendPoint> = apiOrFallback({
-        requireApi().getRegistrationTrend().map { it.toDomain() }
+        it.getRegistrationTrend().map { it.toDomain() }
     }) { db.registrationTrend() }
 
     suspend fun getWardOverview(): WardOverview = apiOrFallback({
-        requireApi().getWardOverview().toDomain()
+        it.getWardOverview().toDomain()
     }) { db.wardOverview() }
 
     suspend fun getBedBoard(): List<BedCard> = apiOrFallback({
-        requireApi().getBedBoard().map { it.toDomain() }
+        it.getBedBoard().map { it.toDomain() }
     }) { db.bedBoard() }
 
     suspend fun getNursingTasks(): List<NursingTask> = apiOrFallback({
-        requireApi().getNursingTasks().map { it.toDomain() }
+        it.getNursingTasks().map { it.toDomain() }
     }) { db.nursingTasks() }
 
     suspend fun getWardCensus(): List<WardCensusRow> = apiOrFallback({
-        requireApi().getWardCensus().map { it.toDomain() }
+        it.getWardCensus().map { it.toDomain() }
     }) { db.wardCensus() }
 
     suspend fun getAtdState(): AdmissionTransferDischargeState = apiOrFallback({
-        requireApi().getAtdState().toDomain()
+        it.getAtdState().toDomain()
     }) { db.atdState() }
 
     suspend fun getShiftHandoff(shift: Shift): List<String> = apiOrFallback({
-        requireApi().getShiftHandoff(shift)
+        it.getShiftHandoff(shift)
     }) { db.shiftHandoffSummary(shift) }
 
-    suspend fun syncPatientData(remoteVersion: Long = 0): Result<SyncPatientDataResponse> = resultOrFallback({
-        requireApi().syncPatientData(remoteVersion).toDomain()
+    suspend fun syncPatientData(remoteVersion: Long = 0): Result<SyncPatientDataResponse> = runResultOrFallback({
+        it.syncPatientData(remoteVersion).toDomain()
     }) {
         val patients = db.allPatients()
         SyncPatientDataResponse(patients = patients, remoteVersion = remoteVersion, count = patients.size)
     }
 
-    suspend fun uploadPatientChanges(changes: List<Patient>): Result<List<SyncResultItem>> = resultOrFallback({
-        requireApi().uploadPatientChanges(changes.map { it.toDto() }).map { it.toDomain() }
+    suspend fun uploadPatientChanges(changes: List<Patient>): Result<List<SyncResultItem>> = runResultOrFallback({
+        it.uploadPatientChanges(changes.map { it.toDto() }).map { it.toDomain() }
     }) {
         changes.map { SyncResultItem(id = it.id, status = "synced", version = 1) }
+    }
+
+    suspend fun uploadClinicalChanges(batch: ClinicalSyncBatchDto): Result<List<SyncResultItem>> = runResultOrFallback({
+        it.uploadClinicalChanges(batch).map { it.toDomain() }
+    }) {
+        fallbackClinicalResults(batch).map { it.toDomain() }
     }
 
     suspend fun resolveConflict(
@@ -104,49 +173,111 @@ object FakeRepository {
         localVersion: Int,
         remoteVersion: Int,
         strategy: String = "SERVER_WINS"
-    ): Result<ConflictResolutionResult> = resultOrFallback({
-        requireApi().resolveConflict(ConflictResolutionRequestDto(entityId, localVersion, remoteVersion, strategy)).toDomain()
+    ): Result<ConflictResolutionResult> = runResultOrFallback({
+        it.resolveConflict(ConflictResolutionRequestDto(entityId, localVersion, remoteVersion, strategy)).toDomain()
     }) {
         ConflictResolutionResult(resolved = true, strategy = strategy, finalVersion = maxOf(localVersion, remoteVersion))
     }
 
-    private suspend fun <T> apiOrFallback(apiCall: suspend () -> T, fallback: suspend () -> T): T {
-        return if (useMockFallback) {
+    suspend fun createLabOrder(order: LabOrder): Result<LabOrder> = runResultOrFallback({
+        it.createLabOrder(order.toDto()).toDomain()
+    }) { order }
+
+    suspend fun getLabOrder(orderId: String): Result<LabOrder?> = runResultOrFallback({
+        it.getLabOrder(orderId)?.toDomain()
+    }) { null }
+
+    suspend fun getPatientLabOrders(patientId: String): Result<List<LabOrder>> = runResultOrFallback({
+        it.getLabOrdersForPatient(patientId).map { dto -> dto.toDomain() }
+    }) { emptyList() }
+
+    suspend fun updateLabOrderStatus(orderId: String, status: LabOrderStatus, actorId: String): Result<LabOrder> = runResultOrFallback({
+        it.updateLabOrderStatus(orderId, UpdateLabOrderStatusRequestDto(status.name, actorId)).toDomain()
+    }) { throw IllegalStateException("No remote lab order store in fallback mode") }
+
+    suspend fun saveLabResults(orderId: String, actorId: String, results: List<LabResult>): Result<List<LabResult>> = runResultOrFallback({
+        it.saveLabResults(SaveLabResultsRequestDto(orderId = orderId, actorId = actorId, results = results.map { r -> r.toDto() }))
+            .map { dto -> dto.toDomain() }
+    }) { results }
+
+    private suspend inline fun <T> runResultOrFallback(
+        apiCall: suspend (ClinicApi) -> T,
+        fallback: suspend () -> T
+    ): Result<T> {
+        val api = clinicApi
+        return try {
+            if (api == null) {
+                Result.success(fallback())
+            } else {
+                Result.success(apiCall(api))
+            }
+        } catch (e: Exception) {
+            if (useMockFallback) {
+                runCatching { fallback() }
+            } else {
+                Result.failure(e.toRepositoryException())
+            }
+        }
+    }
+
+    private suspend inline fun <T> apiOrFallback(
+        apiCall: suspend (ClinicApi) -> T,
+        fallback: suspend () -> T
+    ): T {
+        val api = clinicApi
+        return if (api == null) {
             fallback()
         } else {
-            apiCall()
+            try {
+                apiCall(api)
+            } catch (e: Exception) {
+                if (useMockFallback) fallback() else throw e
+            }
         }
     }
 
-    private suspend fun <T> resultOrFallback(apiCall: suspend () -> T, fallback: suspend () -> T): Result<T> {
-        return try {
-            Result.success(if (useMockFallback) fallback() else apiCall())
-        } catch (e: Throwable) {
-            if (useMockFallback) Result.success(fallback()) else Result.failure(e)
-        }
-    }
-
-    /**
-     * Get sync health status from server
-     */
-    suspend fun getSyncHealth(): Result<SyncHealthStatus> {
-        return try {
-            delay(200)
-            // Backend route is explicitly defined under payments in the current API spec.
-            // TODO: GET /payments/sync-health
-            Result.success(SyncHealthStatus(
-                status = "healthy",
+    suspend fun getSyncHealth(): Result<SyncHealthStatus> = runResultOrFallback(
+        apiCall = { it.getSyncHealth() },
+        fallback = {
+            SyncHealthStatus(
+                status = if (ClinicAuth.hasToken()) "local-only" else "offline",
                 pendingCount = 0,
                 lastSyncTime = Clock.System.now().toEpochMilliseconds()
-            ))
-        } catch (e: Exception) {
-            Result.failure(e)
+            )
         }
-    }
+    )
 
+    suspend fun createEncounter(bundle: OpdEncounterBundle): Result<OpdEncounterBundle> = runResultOrFallback(
+        apiCall = { it.createEncounter(bundle) },
+        fallback = { bundle }
+    )
+
+    suspend fun getEncounter(encounterId: String): Result<OpdEncounterBundle> = runResultOrFallback(
+        apiCall = { it.getEncounter(encounterId) },
+        fallback = { throw IllegalArgumentException("Encounter $encounterId not found in mock mode") }
+    )
+
+    suspend fun getPatientEncounters(patientId: String): Result<List<OpdEncounterBundle>> = runResultOrFallback(
+        apiCall = { it.getPatientEncounters(patientId) },
+        fallback = { emptyList() }
+    )
+
+    @Suppress("UNUSED_PARAMETER")
+    private suspend fun Throwable.toRepositoryException(): Throwable = this
 }
 
-class RepositoryHttpException(val statusCode: Int, val responseBody: String) : Exception(
+private fun fallbackClinicalResults(batch: ClinicalSyncBatchDto): List<SyncResultItemDto> = buildList {
+    batch.encounters.forEach { add(SyncResultItemDto(it.encounterId, "queued-local", 0)) }
+    batch.vitalSigns.forEach { add(SyncResultItemDto(it.vitalSignsId, "queued-local", 0)) }
+    batch.diagnoses.forEach { add(SyncResultItemDto(it.diagnosisId, "queued-local", 0)) }
+    batch.medicationOrders.forEach { add(SyncResultItemDto(it.medicationOrderId, "queued-local", 0)) }
+    batch.encounterOutcomes.forEach { add(SyncResultItemDto(it.outcomeId, "queued-local", 0)) }
+    batch.htsEntries.forEach { add(SyncResultItemDto(it.htsId, "queued-local", 0)) }
+    batch.serviceEvents.forEach { add(SyncResultItemDto(it.serviceEventId, "queued-local", 0)) }
+    batch.patientDocuments.forEach { add(SyncResultItemDto(it.documentId, "queued-local", 0)) }
+}
+
+class RepositoryHttpException(statusCode: Int, responseBody: String) : Exception(
     "HTTP $statusCode: ${responseBody.ifBlank { "No response body" }}"
 )
 
@@ -169,10 +300,9 @@ data class ConflictResolutionResult(
 )
 
 val STAFF_MEMBERS = listOf(
-    StaffMember("DOC-001", "Dr. Aisha Nambala", UserRole.DOCTOR, "General Medicine"),
-    StaffMember("DOC-002", "Dr. Michael Odongo", UserRole.DOCTOR, "Pediatrics"),
-    StaffMember("NRS-001", "Nurse Grace Atieno", UserRole.NURSE, "Maternity Ward"),
-    StaffMember("NRS-002", "Nurse Peter Wekesa", UserRole.NURSE, "Emergency Department"),
-    StaffMember("RCP-001", "Sarah Namutebi", UserRole.RECEPTIONIST, "Front Desk"),
-    StaffMember("ADM-001", "Joseph Kato", UserRole.ADMIN, "Administration")
+    StaffMember("DR-001", "Dr. James Kamau", UserRole.DOCTOR, "General Medicine"),
+    StaffMember("NR-001", "Nurse Faith Wanjiku", UserRole.NURSE, "Emergency Department"),
+    StaffMember("PH-001", "Pharmacist Brian Otieno", UserRole.PHARMACIST, "Pharmacy"),
+    StaffMember("RC-001", "Mary Otieno", UserRole.RECEPTIONIST, "Front Desk"),
+    StaffMember("AD-001", "Admin User", UserRole.ADMIN, "Administration")
 )

@@ -16,7 +16,7 @@ data class SyncHealth(
     val pendingItems: Int = 0,
     val failedItems: Int = 0,
     val lastError: String? = null,
-    val lastSyncedAt: String? = null
+    val lastSyncedAt: String? = null,
 )
 
 /**
@@ -46,12 +46,13 @@ class SyncManager(
             }
         }
 
+        val remaining = localRepository.getPendingSync().size
         return if (failed == 0) {
             SyncHealth(status = SyncStatus.SUCCESS, pendingItems = 0)
         } else {
             SyncHealth(
                 status = SyncStatus.ERROR,
-                pendingItems = pending.size - (pending.size - failed),
+                pendingItems = remaining,
                 failedItems = failed,
                 lastError = "Some records failed to sync"
             )

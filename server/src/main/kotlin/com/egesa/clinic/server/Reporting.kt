@@ -3,7 +3,6 @@ package com.egesa.clinic.server
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.request.queryParameters
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import kotlinx.serialization.Serializable

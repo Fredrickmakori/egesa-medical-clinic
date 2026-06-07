@@ -1,0 +1,105 @@
+﻿To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :androidApp
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: The option setting 'android.newDsl=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: API 'applicationVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling applicationVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: API 'testVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling testVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: API 'unitTestVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling unitTestVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: The multidex library is included as a dependency, but it is not needed for apps
+with minSdk >= 21. Please remove dependency 'androidx.multidex:multidex:2.0.1' from ':androidApp'.
+See https://developer.android.com/build/multidex for more information.
+w: Deprecated 'org.jetbrains.kotlin.android' plugin usage
+The 'org.jetbrains.kotlin.android' plugin in project ':androidApp' is no longer required for Kotlin support since AGP 9.0.
+Solution: Remove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.
+See https://kotl.in/gradle/agp-built-in-kotlin for more details.
+
+
+> Configure project :shared
+w: file:///C:/Users/USER/AndroidStudioProjects/egesa-medical-clinic-mobile-app/shared/build.gradle.kts:114:1: 'fun Project.android(configure: Action<LibraryExtension>): Unit' is deprecated. Replaced by com.android.build.api.dsl.LibraryExtension.
+This class is not used for the public extensions in AGP when android.newDsl=true, which is the default in AGP 9.0, and will be removed in AGP 10.0.
+WARNING: API 'libraryVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling libraryVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+w: The 'org.jetbrains.kotlin.multiplatform' plugin deprecated compatibility with Android Gradle plugin: 'com.android.library'
+The 'org.jetbrains.kotlin.multiplatform' plugin is not compatible with 'com.android.library' starting with Android Gradle Plugin 9.0.0.
+Solution: Please use the 'com.android.kotlin.multiplatform.library' plugin instead of 'com.android.library'.
+See https://kotl.in/gradle/agp-new-kmp for more details.
+
+
+> Task :shared:kmpPartiallyResolvedDependenciesChecker
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:convertXmlValueResourcesForAndroidMain NO-SOURCE
+> Task :shared:copyNonXmlValueResourcesForAndroidMain NO-SOURCE
+> Task :shared:prepareComposeResourcesTaskForAndroidMain NO-SOURCE
+> Task :shared:generateResourceAccessorsForAndroidMain NO-SOURCE
+> Task :shared:convertXmlValueResourcesForCommonMain NO-SOURCE
+> Task :shared:copyNonXmlValueResourcesForCommonMain NO-SOURCE
+> Task :shared:prepareComposeResourcesTaskForCommonMain NO-SOURCE
+> Task :shared:generateResourceAccessorsForCommonMain NO-SOURCE
+> Task :shared:convertXmlValueResourcesForMobileMain NO-SOURCE
+> Task :shared:copyNonXmlValueResourcesForMobileMain NO-SOURCE
+> Task :shared:prepareComposeResourcesTaskForMobileMain NO-SOURCE
+> Task :shared:generateResourceAccessorsForMobileMain NO-SOURCE
+> Task :shared:generateActualResourceCollectorsForAndroidMain UP-TO-DATE
+> Task :shared:generateCommonMainClinicDatabaseInterface UP-TO-DATE
+> Task :shared:generateComposeResClass UP-TO-DATE
+> Task :shared:preBuild UP-TO-DATE
+> Task :shared:preDebugBuild UP-TO-DATE
+> Task :shared:generateDebugResources UP-TO-DATE
+> Task :shared:packageDebugResources UP-TO-DATE
+> Task :shared:processDebugNavigationResources UP-TO-DATE
+> Task :shared:parseDebugLocalResources UP-TO-DATE
+> Task :shared:generateDebugRFile UP-TO-DATE
+> Task :shared:generateExpectResourceCollectorsForCommonMain UP-TO-DATE
+> Task :shared:convertXmlValueResourcesForAndroidDebug NO-SOURCE
+> Task :shared:copyNonXmlValueResourcesForAndroidDebug NO-SOURCE
+> Task :shared:prepareComposeResourcesTaskForAndroidDebug NO-SOURCE
+> Task :shared:generateResourceAccessorsForAndroidDebug NO-SOURCE
+> Task :shared:compileDebugKotlinAndroid
+w: file:///C:/Users/USER/AndroidStudioProjects/egesa-medical-clinic-mobile-app/shared/src/androidMain/kotlin/com/egesa/clinic/shared/db/DatabaseDriverFactory.kt:8:1 'expect'/'actual' classes (including interfaces, objects, annotations, enums, and 'actual' typealiases) are in Beta. Consider using the '-Xexpect-actual-classes' flag to suppress this warning. Also see: https://youtrack.jetbrains.com/issue/KT-61573
+w: file:///C:/Users/USER/AndroidStudioProjects/egesa-medical-clinic-mobile-app/shared/src/commonMain/kotlin/com/egesa/clinic/shared/data/LocalRepository.kt:278:61 Elvis operator (?:) always returns the left operand of non-nullable type 'Long'.
+w: file:///C:/Users/USER/AndroidStudioProjects/egesa-medical-clinic-mobile-app/shared/src/commonMain/kotlin/com/egesa/clinic/shared/db/DatabaseDriverFactory.kt:5:1 'expect'/'actual' classes (including interfaces, objects, annotations, enums, and 'actual' typealiases) are in Beta. Consider using the '-Xexpect-actual-classes' flag to suppress this warning. Also see: https://youtrack.jetbrains.com/issue/KT-61573
+w: Detected multiple Kotlin daemon sessions at 
+
+[Incubating] Problems report is available at: file:///C:/Users/USER/AndroidStudioProjects/egesa-medical-clinic-mobile-app/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 11m 2s
+11 actionable tasks: 2 executed, 9 up-to-date

@@ -29,11 +29,20 @@ val Teal500 = Color(0xFF14B8A6)
 val Teal200 = Color(0xFF99F6E4)
 val Teal100 = Color(0xFFCCFBF1)
 
+val Indigo700 = Color(0xFF4338CA)
+val Indigo100 = Color(0xFFE0E7FF)
+val Sky700 = Color(0xFF0369A1)
+val Sky100 = Color(0xFFE0F2FE)
+val Amber700 = Color(0xFFB45309)
+val Amber100 = Color(0xFFFEF3C7)
+val Rose700 = Color(0xFFBE123C)
+val Rose100 = Color(0xFFFFE4E6)
+
 // ── Semantic status ────────────────────────────────────────────────────────────
-val StatusCritical = Color(0xFFEF4444)
-val StatusWarning  = Color(0xFFF59E0B)
-val StatusStable   = Color(0xFF10B981)
-val StatusInfo     = Color(0xFF3B82F6)
+val StatusCritical = Color(0xFFDC2626)
+val StatusWarning  = Color(0xFFD97706)
+val StatusStable   = Color(0xFF059669)
+val StatusInfo     = Color(0xFF2563EB)
 val StatusMuted    = Color(0xFFCBD5E1)
 
 // ── Neutrals ───────────────────────────────────────────────────────────────────
@@ -51,24 +60,24 @@ val Slate900 = Color(0xFF0F172A)
 
 // ── Sidebar accent ─────────────────────────────────────────────────────────────
 val SidebarBg      = Navy900
-val SidebarHover   = Color(0xFF0E3A5F)
-val SidebarActive  = Color(0xFF1A3A5C)
-val SidebarBorder  = Color(0xFF143352)
+val SidebarHover   = Color(0xFF133B5C)
+val SidebarActive  = Color(0xFF17324D)
+val SidebarBorder  = Color(0xFF1D4565)
 
 private val ColorScheme = lightColorScheme(
-    primary            = Navy800,
+    primary            = Indigo700,
     onPrimary          = White,
-    primaryContainer   = Navy100,
-    onPrimaryContainer = Navy900,
-    secondary          = Teal600,
+    primaryContainer   = Indigo100,
+    onPrimaryContainer = Color(0xFF1E1B4B),
+    secondary          = Sky700,
     onSecondary        = White,
     secondaryContainer = Teal100,
     onSecondaryContainer = Color(0xFF003330),
-    background         = Slate50,
+    background         = Color(0xFFF6F7F9),
     onBackground       = Slate900,
     surface            = White,
     onSurface          = Slate900,
-    surfaceVariant     = Slate100,
+    surfaceVariant     = Color(0xFFF3F4F6),
     onSurfaceVariant   = Slate500,
     outline            = Slate200,
     outlineVariant     = Slate100,
@@ -79,29 +88,29 @@ private val ColorScheme = lightColorScheme(
 )
 
 val ClinicTypography = Typography(
-    displayLarge  = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.Bold,     letterSpacing = (-0.5).sp),
-    displayMedium = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold,     letterSpacing = (-0.3).sp),
+    displayLarge  = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold),
+    displayMedium = TextStyle(fontSize = 25.sp, fontWeight = FontWeight.Bold),
     displaySmall  = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.SemiBold),
     headlineLarge = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.SemiBold),
     headlineMedium= TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
     headlineSmall = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
     titleLarge    = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
     titleMedium   = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
-    titleSmall    = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium,   letterSpacing = 0.1.sp),
+    titleSmall    = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
     bodyLarge     = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Normal),
     bodyMedium    = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal),
     bodySmall     = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal),
-    labelLarge    = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium,   letterSpacing = 0.1.sp),
-    labelMedium   = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium,   letterSpacing = 0.4.sp),
-    labelSmall    = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium,   letterSpacing = 0.5.sp),
+    labelLarge    = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+    labelMedium   = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+    labelSmall    = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium),
 )
 
 val ClinicShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
     small      = RoundedCornerShape(6.dp),
     medium     = RoundedCornerShape(8.dp),
-    large      = RoundedCornerShape(12.dp),
-    extraLarge = RoundedCornerShape(16.dp),
+    large      = RoundedCornerShape(8.dp),
+    extraLarge = RoundedCornerShape(8.dp),
 )
 
 @Composable

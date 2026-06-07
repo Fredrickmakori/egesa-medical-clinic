@@ -47,7 +47,8 @@ data class TrendPoint(
     val value: Int
 )
 
-data class DepartmentMetric(
+data class Departmen
+tMetric(
     val department: String,
     val throughput: Int,
     val avgTurnaroundMinutes: Int

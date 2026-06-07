@@ -1,0 +1,15 @@
+{
+  "_managed": true,
+  "mcpServers": {
+    "DIGITAL OCEAN": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@digitalocean/mcp"
+      ],
+      "env": {
+        "API KEY": "dop_v1_2933ff52f4930f7e056bbdbd87ed7aeef8bbae582c0bf29bd6a94c5567cde7ec"
+      }
+    }
+  }
+}

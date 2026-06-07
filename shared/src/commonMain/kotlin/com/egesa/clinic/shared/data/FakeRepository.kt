@@ -8,6 +8,7 @@ import kotlinx.datetime.Clock
 object FakeRepository {
 
     private val db = HospitalState()
+    private var clinicApi: ClinicApi? = null
 
     /**
      * Enable local mock fallback for development and offline testing.
@@ -30,8 +31,6 @@ object FakeRepository {
     private fun requireApi(): ClinicApi = clinicApi ?: error("ClinicApi is not configured. Call FakeRepository.installClinicApi(...) during app startup.")
 
     // ── Staff ──────────────────────────────────────────────────────────────────
-
-    suspend fun getStaff(): List<StaffMember> = STAFF_MEMBERS
 
     suspend fun validatePin(staffId: String, pin: String): Boolean = apiOrFallback({
         requireApi().validatePin(staffId, pin).authenticated
@@ -87,14 +86,14 @@ object FakeRepository {
         requireApi().getShiftHandoff(shift)
     }) { db.shiftHandoffSummary(shift) }
 
-    suspend fun syncPatientData(remoteVersion: Long = 0): Result<SyncPatientDataResponse> = runResultOrFallback({
+    suspend fun syncPatientData(remoteVersion: Long = 0): Result<SyncPatientDataResponse> = resultOrFallback({
         requireApi().syncPatientData(remoteVersion).toDomain()
     }) {
         val patients = db.allPatients()
         SyncPatientDataResponse(patients = patients, remoteVersion = remoteVersion, count = patients.size)
     }
 
-    suspend fun uploadPatientChanges(changes: List<Patient>): Result<List<SyncResultItem>> = runResultOrFallback({
+    suspend fun uploadPatientChanges(changes: List<Patient>): Result<List<SyncResultItem>> = resultOrFallback({
         requireApi().uploadPatientChanges(changes.map { it.toDto() }).map { it.toDomain() }
     }) {
         changes.map { SyncResultItem(id = it.id, status = "synced", version = 1) }
@@ -105,21 +104,25 @@ object FakeRepository {
         localVersion: Int,
         remoteVersion: Int,
         strategy: String = "SERVER_WINS"
-    ): Result<ConflictResolutionResult> = runResultOrFallback({
+    ): Result<ConflictResolutionResult> = resultOrFallback({
         requireApi().resolveConflict(ConflictResolutionRequestDto(entityId, localVersion, remoteVersion, strategy)).toDomain()
     }) {
         ConflictResolutionResult(resolved = true, strategy = strategy, finalVersion = maxOf(localVersion, remoteVersion))
     }
-
-    suspend fun getSyncHealth(): Result<Map<String, String>> = runResultOrFallback({
-        requireApi().getSyncHealth()
-    }) { mapOf("status" to "unknown") }
 
     private suspend fun <T> apiOrFallback(apiCall: suspend () -> T, fallback: suspend () -> T): T {
         return if (useMockFallback) {
             fallback()
         } else {
             apiCall()
+        }
+    }
+
+    private suspend fun <T> resultOrFallback(apiCall: suspend () -> T, fallback: suspend () -> T): Result<T> {
+        return try {
+            Result.success(if (useMockFallback) fallback() else apiCall())
+        } catch (e: Throwable) {
+            if (useMockFallback) Result.success(fallback()) else Result.failure(e)
         }
     }
 
@@ -141,15 +144,28 @@ object FakeRepository {
         }
     }
 
-    private suspend fun Throwable.toRepositoryException(): Throwable = when (this) {
-        is ClientRequestException -> RepositoryHttpException(response.status.value, response.bodyAsText())
-        is ServerResponseException -> RepositoryHttpException(response.status.value, response.bodyAsText())
-        else -> this
-    }
 }
 
 class RepositoryHttpException(val statusCode: Int, val responseBody: String) : Exception(
     "HTTP $statusCode: ${responseBody.ifBlank { "No response body" }}"
+)
+
+data class SyncPatientDataResponse(
+    val patients: List<Patient>,
+    val remoteVersion: Long,
+    val count: Int
+)
+
+data class SyncResultItem(
+    val id: String,
+    val status: String,
+    val version: Int
+)
+
+data class ConflictResolutionResult(
+    val resolved: Boolean,
+    val strategy: String,
+    val finalVersion: Int
 )
 
 val STAFF_MEMBERS = listOf(

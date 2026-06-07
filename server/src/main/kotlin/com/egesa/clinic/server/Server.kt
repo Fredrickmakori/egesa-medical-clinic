@@ -1,7 +1,6 @@
 package com.egesa.clinic.server
 
 import com.egesa.clinic.shared.HospitalState
-import com.egesa.clinic.shared.Permission
 import com.egesa.clinic.shared.StkRequestStatus
 import com.egesa.clinic.shared.Shift
 import com.egesa.clinic.shared.AuditEvent
@@ -40,18 +39,11 @@ import com.egesa.clinic.shared.data.toPatient
 import com.egesa.clinic.shared.domain.OpdEncounterBundle
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.auth.principal
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.receive
-import io.ktor.server.response.respondText
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -95,14 +87,6 @@ fun Application.hospitalApi() {
 
     install(ContentNegotiation) {
         json()
-    }
-    install(io.ktor.server.auth.Authentication) {
-        jwt("auth-jwt") {
-            verifier(JwtConfig.verifier())
-            validate { credential ->
-                if (!credential.subject.isNullOrBlank()) io.ktor.server.auth.jwt.JWTPrincipal(credential.payload) else null
-            }
-        }
     }
 
     routing {
@@ -680,14 +664,13 @@ fun Application.hospitalApi() {
                 call.respond(encounterStore.values.filter { it.encounter.patientId == patientId })
             }
         }
-        get("/scope") {
-            call.respondText("""
-                Multiplatform clients: Android + Desktop Compose.
-                Secure auth: JWT-based login (/auth/login) with role-based endpoints.
-                Database server: Supabase/PostgreSQL migrations available under infra/supabase.
-                Core modules: registration, appointments/queue, consultation, diagnosis, wards, billing/STK, reporting, audit trail.
-            """.trimIndent())
+
+        post("/payments/callback/mpesa") {
+            val payload = call.receive<JsonElement>()
+            call.respond(mpesaService.parseCallback(payload))
         }
+        get("/payments/sync-health") { call.respond(state.syncHealth()) }
+        get("/payments/pending-stk") { call.respond(state.pendingStkRequests()) }
     }
 }
 
@@ -815,36 +798,3 @@ private fun simulateStkStatusLookup(requestId: String): StkRequestStatus {
         else -> StkRequestStatus.SUCCESS
     }
 }
-
-// ── Sync-related request/response classes ──────────────────────────────────
-
-@kotlinx.serialization.Serializable
-data class SyncPatientRequest(
-    val patientId: String,
-    val version: Int,
-    val localVersion: Int
-)
-
-@kotlinx.serialization.Serializable
-data class SyncPatientResponse(
-    val patientId: String,
-    val updated: Boolean,
-    val remoteVersion: Int,
-    val message: String
-)
-
-@kotlinx.serialization.Serializable
-data class ConflictResolutionRequest(
-    val entityId: String,
-    val localVersion: Int,
-    val remoteVersion: Int,
-    val strategy: String  // CLIENT_WINS, SERVER_WINS, MERGE
-)
-
-@kotlinx.serialization.Serializable
-data class ConflictResolutionResponse(
-    val resolved: Boolean,
-    val strategy: String,
-    val finalVersion: Int
-)
-

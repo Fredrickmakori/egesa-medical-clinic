@@ -115,7 +115,6 @@ data class RolePermissionMap(
 }
 
 enum class WorkflowArea {
-    DASHBOARD,
     RECEPTION,
     APPOINTMENTS,
     CONSULTATION,
@@ -145,56 +144,18 @@ enum class Shift {
     NIGHT
 }
 
-enum class TimelineEventType {
-    CONSULTATION, LAB, MEDICATION, PROCEDURE, DISCHARGE, NOTE
-}
-
-@Serializable
-data class TimelineEvent(
-    val title: String,
-    val details: String,
-    val type: TimelineEventType,
-    val timestamp: String
-)
-
-enum class SaveState { DRAFT_SAVED, UNSAVED_CHANGES, FINAL_SIGN_OFF }
-
-data class EncounterForm(
-    val chiefComplaint: String = "",
-    val history: String = "",
-    val examination: String = "",
-    val diagnosis: String = "",
-    val plan: String = ""
-)
-
-enum class StkRequestStatus { PENDING, SUCCESS, FAILED }
-
-data class NavItem(
-    val area: WorkflowArea,
-    val label: String,
-    val visibilityAnnotation: String = ""
-)
-
-data class GlobalAction(val label: String)
-
-@Serializable
 data class Patient(
     val id: String,
     val fullName: String,
     val age: Int,
-    val sex: Sex,
+    val sex: String,
     val status: String,
     val assignedWard: String? = null,
     val roomBed: String? = null,
     val acuity: String = "Moderate",
-    val isolation: String? = null,
-    val visits: Int = 0,
-    val activeDiagnosis: String = "",
-    val currentMedications: List<String> = emptyList(),
-    val timeline: List<TimelineEvent> = emptyList()
+    val isolation: String? = null
 )
 
-@Serializable
 data class DashboardMetric(
     val title: String,
     val value: String,
@@ -206,7 +167,8 @@ data class TrendPoint(
     val value: Int
 )
 
-data class DepartmentMetric(
+data class Departmen
+tMetric(
     val department: String,
     val throughput: Int,
     val avgTurnaroundMinutes: Int
@@ -231,10 +193,7 @@ data class AuditEvent(
     val action: String,
     val module: String,
     val timestamp: String,
-    val contextReference: String,
-    val userId: String = "",
-    val permission: Permission? = null,
-    val granted: Boolean = true
+    val contextReference: String
 )
 
 data class ConfigDictionary(
@@ -289,29 +248,6 @@ data class WardBed(
 data class CloudSyncConfig(
     val baseUrl: String,
     val anonKey: String
-)
-
-// ── Sync-related data classes ──────────────────────────────────────────────
-
-@Serializable
-data class SyncPatientDataResponse(
-    val patients: List<Patient>,
-    val remoteVersion: Long,
-    val count: Int
-)
-
-@Serializable
-data class SyncResultItem(
-    val id: String,
-    val status: String,  // synced, failed, conflict
-    val version: Int
-)
-
-@Serializable
-data class ConflictResolutionResult(
-    val resolved: Boolean,
-    val strategy: String,
-    val finalVersion: Int
 )
 
 data class WardOverview(
@@ -418,15 +354,21 @@ class HospitalState {
 
     fun adminKpis(): List<DashboardMetric> = emptyList()
 
-    fun bottleneckHeatmap(): List<BottleneckCell> = emptyList()
+    fun bottleneckHeatmap(): List<BottleneckCell> = listOf(
+        BottleneckCell("Triage", "Medium", 9),
+        BottleneckCell("Consultation", "High", 17),
+        BottleneckCell("Lab", "Critical", 21),
+        BottleneckCell("Pharmacy", "Low", 4),
+        BottleneckCell("Discharge", "Medium", 11)
+    )
 
     fun registrationTrend(): List<TrendPoint> = emptyList()
 
     fun wardOverview(): WardOverview = WardOverview(
-        occupancyPercent = 0,
-        bedsAvailable = 0,
-        nurseWorkload = "N/A",
-        alerts = emptyList()
+        occupancyPercent = 82,
+        bedsAvailable = 14,
+        nurseWorkload = "1:6 avg ratio",
+        alerts = listOf("2 sepsis screens overdue", "1 fall-risk reassessment due", "Isolation PPE stock low")
     )
 
     fun wardBeds(): List<WardBed> = emptyList()
@@ -487,7 +429,12 @@ class HospitalState {
         lastSyncTime = Clock.System.now().toEpochMilliseconds()
     )
 
-    fun pendingStkRequests(): List<String> = pendingStk.toList()
+    fun shiftHandoffSummary(shift: Shift): List<String> = when (shift) {
+        Shift.DAY -> listOf(
+            "Admissions: 5 | Transfers: 2 | Discharges: 3",
+            "Critical watchlist: PT-004, PT-011",
+            "Pending diagnostics: 4 CBC, 2 blood cultures"
+        )
 
     fun auditTrail(): List<AuditEvent> = auditEvents.toList()
 

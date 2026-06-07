@@ -136,7 +136,7 @@ data class LoginResponseDto(
 )
 @Serializable data class StaffMemberDto(val id: String, val fullName: String, val role: String, val department: String)
 @Serializable data class PatientDto(
-    val id: String, val fullName: String, val age: Int, val sex: Sex, val status: String,
+    val id: String, val fullName: String, val age: Int, val sex: String, val status: String,
     val assignedWard: String? = null, val roomBed: String? = null, val acuity: String = "Moderate",
     val isolation: String? = null, val visits: Int = 0, val activeDiagnosis: String = "",
     val currentMedications: List<String> = emptyList(), val timeline: List<TimelineEvent> = emptyList()

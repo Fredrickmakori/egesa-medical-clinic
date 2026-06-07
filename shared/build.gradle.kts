@@ -1,14 +1,9 @@
-@file:OptIn(ExperimentalWasmDsl::class)
-
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.compose.multiplatform)
-    alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.sqldelight)
+    kotlin("multiplatform")
+    id("com.android.library")
+    id("org.jetbrains.compose")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("app.cash.sqldelight")
 }
 
 kotlin {
@@ -78,8 +73,18 @@ kotlin {
         }
         val jvmMain by getting {
             dependencies {
-                implementation(libs.ktor.client.java)
-                implementation(libs.sqldelight.sqlite.driver)
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.material3)
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+                implementation("io.ktor:ktor-client-core:2.3.12")
+                implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+                implementation("app.cash.sqldelight:runtime:2.0.2")
+                implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
+                implementation("app.cash.sqldelight:async-extensions:2.0.2")
             }
         }
         val commonTest by getting {
@@ -97,22 +102,11 @@ kotlin {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
         }
-        val wasmJsMain by getting {
+        val desktopMain by getting {
             dependencies {
-                implementation(libs.ktor.client.js)
-                implementation(libs.ktor.client.content.negotiation)
-                implementation(libs.ktor.serialization.kotlinx.json)
-                implementation(libs.sqldelight.web.driver)
+                implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
+                implementation("io.ktor:ktor-client-java:2.3.12")
             }
-        }
-    }
-}
-
-sqldelight {
-    databases {
-        create("ClinicDatabase") {
-            packageName.set("com.egesa.clinic.shared.db")
-            generateAsync.set(true)
         }
     }
 }
@@ -120,9 +114,15 @@ sqldelight {
 android {
     namespace = "com.egesa.clinic.shared"
     compileSdk = 35
-    defaultConfig { minSdk = 24 }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+    defaultConfig {
+        minSdk = 24
+    }
+}
+
+sqldelight {
+    databases {
+        create("ClinicDatabase") {
+            packageName.set("com.egesa.clinic.shared.db")
+        }
     }
 }

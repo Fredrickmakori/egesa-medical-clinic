@@ -1,13 +1,10 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.compose.multiplatform)
-    alias(libs.plugins.compose.compiler)
+    id("com.android.application")
+    kotlin("android")
+    kotlin("plugin.serialization")
+    id("org.jetbrains.compose")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
-
-tasks.register("prepareKotlinBuildScriptModel") {}
-tasks.register("prepareKotlinIdeaImport") {}
-
 
 android {
     namespace = "com.egesa.clinic.android"
@@ -27,32 +24,7 @@ android {
         buildConfig = true
     }
 
-    buildTypes {
-        debug {
-            // Emulator/LAN dev default; override per-environment as needed.
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080\"")
-            buildConfigField("boolean", "ALLOW_MOCK_FALLBACK", "true")
-            manifestPlaceholders["usesCleartextTraffic"] = "true"
-        }
-        release {
-            // MUST be HTTPS for hospital use. Set this to your cloud API domain.
-            buildConfigField("String", "API_BASE_URL", "\"https://api.example.com\"")
-            buildConfigField("boolean", "ALLOW_MOCK_FALLBACK", "false")
-            isMinifyEnabled = false
-            manifestPlaceholders["usesCleartextTraffic"] = "false"
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
-    }
-
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
+    buildFeatures { compose = true }
 }
 
 dependencies {
@@ -60,7 +32,10 @@ dependencies {
     implementation(compose.runtime)
     implementation(compose.foundation)
     implementation(compose.material3)
-    implementation(libs.androidx.activity.compose)
-    implementation("com.google.mlkit:text-recognition:16.0.1")
-    implementation("androidx.multidex:multidex:2.0.1")
+    implementation("androidx.activity:activity-compose:1.9.3")
+
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.4")
+    implementation("io.github.jan-tennert.supabase:supabase-kt:2.5.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation("io.ktor:ktor-client-android:2.3.12")
 }

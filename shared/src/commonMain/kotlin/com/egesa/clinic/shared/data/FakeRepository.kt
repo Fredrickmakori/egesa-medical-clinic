@@ -12,6 +12,7 @@ import kotlinx.datetime.Clock
 object FakeRepository {
 
     private val db = HospitalState()
+    private var clinicApi: ClinicApi? = null
 
     /**
      * Enable local mock fallback for development and offline testing.
@@ -288,6 +289,24 @@ private fun fallbackClinicalResults(batch: ClinicalSyncBatchDto): List<SyncResul
 
 class RepositoryHttpException(statusCode: Int, responseBody: String) : Exception(
     "HTTP $statusCode: ${responseBody.ifBlank { "No response body" }}"
+)
+
+data class SyncPatientDataResponse(
+    val patients: List<Patient>,
+    val remoteVersion: Long,
+    val count: Int
+)
+
+data class SyncResultItem(
+    val id: String,
+    val status: String,
+    val version: Int
+)
+
+data class ConflictResolutionResult(
+    val resolved: Boolean,
+    val strategy: String,
+    val finalVersion: Int
 )
 
 val STAFF_MEMBERS = listOf(

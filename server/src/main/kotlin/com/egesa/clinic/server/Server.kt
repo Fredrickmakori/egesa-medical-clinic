@@ -39,17 +39,11 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.auth.principal
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.http.content.staticResources
 import io.ktor.server.netty.Netty
-import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.receive
-import io.ktor.server.response.respondText
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -87,14 +81,6 @@ fun Application.hospitalApi() {
 
     install(ContentNegotiation) {
         json()
-    }
-    install(io.ktor.server.auth.Authentication) {
-        jwt("auth-jwt") {
-            verifier(JwtConfig.verifier())
-            validate { credential ->
-                if (!credential.subject.isNullOrBlank()) io.ktor.server.auth.jwt.JWTPrincipal(credential.payload) else null
-            }
-        }
     }
 
     routing {
@@ -818,14 +804,13 @@ fun Application.hospitalApi() {
                 call.respond(encounters)
             }
         }
-        get("/scope") {
-            call.respondText("""
-                Multiplatform clients: Android + Desktop Compose.
-                Secure auth: JWT-based login (/auth/login) with role-based endpoints.
-                Database server: Supabase/PostgreSQL migrations available under infra/supabase.
-                Core modules: registration, appointments/queue, consultation, diagnosis, wards, billing/STK, reporting, audit trail.
-            """.trimIndent())
+
+        post("/payments/callback/mpesa") {
+            val payload = call.receive<JsonElement>()
+            call.respond(mpesaService.parseCallback(payload))
         }
+        get("/payments/sync-health") { call.respond(state.syncHealth()) }
+        get("/payments/pending-stk") { call.respond(state.pendingStkRequests()) }
     }
 }
 

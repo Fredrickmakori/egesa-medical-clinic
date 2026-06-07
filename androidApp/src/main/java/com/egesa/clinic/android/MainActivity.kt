@@ -1,5 +1,3 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-
 package com.egesa.clinic.android
 
 import android.graphics.Bitmap

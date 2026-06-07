@@ -132,6 +132,8 @@ data class Prescription(
     val duration: String? = null,
     val route: String? = null,
     val instructions: String? = null,
+    val status: String = "ACTIVE",
+    val externalPurchaseMarked: Boolean = false,
     val version: Int = 1,
     val createdAt: String = Clock.System.now().toString(),
     val updatedAt: String = Clock.System.now().toString(),

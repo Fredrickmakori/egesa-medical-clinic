@@ -2,15 +2,21 @@ package com.egesa.clinic.shared.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -517,3 +523,65 @@ fun CompactDataTable(
         }
     }
 }
+
+@Composable
+fun ClinicDropdownField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    options: List<String>,
+    modifier: Modifier = Modifier,
+    displayFormatter: (String) -> String = { it.replaceFirstChar { c -> c.uppercase() } }
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            value = displayFormatter(value),
+            onValueChange = {},
+            label = { Text(label) },
+            modifier = Modifier.fillMaxWidth(),
+            readOnly = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            shape = MaterialTheme.shapes.medium,
+            trailingIcon = {
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = "Dropdown indicator",
+                    tint = Slate500
+                )
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Indigo700,
+                unfocusedBorderColor = Slate200,
+                focusedContainerColor = White,
+                unfocusedContainerColor = White,
+                disabledBorderColor = Slate200,
+                disabledContainerColor = White,
+                disabledLabelColor = Slate500,
+                disabledTextColor = Slate900
+            )
+        )
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable { expanded = true }
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(White)
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(displayFormatter(option), style = MaterialTheme.typography.bodyMedium, color = Slate900) },
+                    onClick = {
+                        onValueChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+

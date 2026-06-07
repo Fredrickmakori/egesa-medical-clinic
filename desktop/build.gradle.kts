@@ -17,6 +17,7 @@ kotlin {
             implementation(compose.ui)
             @Suppress("DEPRECATION")
             implementation(compose.material3)
+            implementation(libs.logback.classic)
         }
     }
 }

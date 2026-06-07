@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.egesa.clinic.shared.data.DocumentCaptureGateway
 import com.egesa.clinic.shared.ui.components.ClinicCard
+import com.egesa.clinic.shared.ui.components.ClinicDropdownField
 import com.egesa.clinic.shared.ui.components.LabeledDivider
 import com.egesa.clinic.shared.ui.components.SectionHeader
 import com.egesa.clinic.shared.ui.components.TextBadge
@@ -109,15 +110,22 @@ fun RegistrationDemographicsSection(
                 "Age",
                 modifier = if (isWideLayout()) Modifier.weight(1f) else Modifier,
             )
-            RegistrationField(
-                state.triageLevel,
-                { onStateChange(state.copy(triageLevel = it.digitsOnly().take(1))) },
-                "Triage (1–5)",
+            ClinicDropdownField(
+                value = state.triageLevel,
+                onValueChange = { onStateChange(state.copy(triageLevel = it)) },
+                label = "Triage (1–5)",
+                options = listOf("1", "2", "3", "4", "5"),
                 modifier = if (isWideLayout()) Modifier.weight(1f) else Modifier,
+                displayFormatter = { it }
             )
         }
         Spacer(Modifier.height(8.dp))
-        RegistrationField(state.sex, { onStateChange(state.copy(sex = it)) }, "Sex (male, female, intersex, unknown)")
+        ClinicDropdownField(
+            value = state.sex,
+            onValueChange = { onStateChange(state.copy(sex = it)) },
+            label = "Sex",
+            options = listOf("male", "female", "intersex", "unknown")
+        )
         Spacer(Modifier.height(8.dp))
         LabeledDivider("Location & acuity")
         Spacer(Modifier.height(8.dp))
@@ -137,16 +145,18 @@ fun RegistrationDemographicsSection(
         }
         Spacer(Modifier.height(8.dp))
         RegistrationFieldRow {
-            RegistrationField(
-                state.acuity,
-                { onStateChange(state.copy(acuity = it)) },
-                "Acuity",
+            ClinicDropdownField(
+                value = state.acuity,
+                onValueChange = { onStateChange(state.copy(acuity = it)) },
+                label = "Acuity",
+                options = listOf("Low", "Moderate", "High", "Critical"),
                 modifier = if (isWideLayout()) Modifier.weight(1f) else Modifier,
             )
-            RegistrationField(
-                state.isolation,
-                { onStateChange(state.copy(isolation = it)) },
-                "Isolation",
+            ClinicDropdownField(
+                value = if (state.isolation.isBlank()) "None" else state.isolation,
+                onValueChange = { onStateChange(state.copy(isolation = if (it == "None") "" else it)) },
+                label = "Isolation",
+                options = listOf("None", "Contact", "Droplet", "Airborne", "Protective"),
                 modifier = if (isWideLayout()) Modifier.weight(1f) else Modifier,
             )
         }
@@ -261,16 +271,18 @@ fun RegistrationQueueSection(
         )
         Spacer(Modifier.height(10.dp))
         RegistrationFieldRow {
-            RegistrationField(
-                state.queueDestination,
-                { onStateChange(state.copy(queueDestination = it)) },
-                "Next step",
+            ClinicDropdownField(
+                value = state.queueDestination,
+                onValueChange = { onStateChange(state.copy(queueDestination = it)) },
+                label = "Next step",
+                options = listOf("Triage", "Consultation", "Lab", "Pharmacy", "Billing"),
                 modifier = if (isWideLayout()) Modifier.weight(1f) else Modifier,
             )
-            RegistrationField(
-                state.queuePriority,
-                { onStateChange(state.copy(queuePriority = it)) },
-                "Priority",
+            ClinicDropdownField(
+                value = state.queuePriority,
+                onValueChange = { onStateChange(state.copy(queuePriority = it)) },
+                label = "Priority",
+                options = listOf("Routine", "Urgent", "Emergency"),
                 modifier = if (isWideLayout()) Modifier.weight(1f) else Modifier,
             )
         }
@@ -311,17 +323,21 @@ fun RegistrationDocumentSection(
             Spacer(Modifier.height(8.dp))
         }
         RegistrationFieldRow {
-            RegistrationField(
-                state.documentType,
-                { onStateChange(state.copy(documentType = it)) },
-                "Document type",
+            ClinicDropdownField(
+                value = state.documentType,
+                onValueChange = { onStateChange(state.copy(documentType = it)) },
+                label = "Document type",
+                options = listOf("National ID", "Passport", "Driver's License", "Health Insurance Card", "Other"),
                 modifier = if (isWideLayout()) Modifier.weight(1f) else Modifier,
+                displayFormatter = { it }
             )
-            RegistrationField(
-                state.verificationStatus,
-                { onStateChange(state.copy(verificationStatus = it)) },
-                "Verification status",
+            ClinicDropdownField(
+                value = state.verificationStatus,
+                onValueChange = { onStateChange(state.copy(verificationStatus = it)) },
+                label = "Verification status",
+                options = listOf("PENDING_REVIEW", "VERIFIED", "REJECTED"),
                 modifier = if (isWideLayout()) Modifier.weight(1f) else Modifier,
+                displayFormatter = { it }
             )
         }
         Spacer(Modifier.height(8.dp))

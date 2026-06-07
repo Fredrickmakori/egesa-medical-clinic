@@ -2,5 +2,10 @@
 build/
 **/build/
 .local.properties
+.env
+.env.*
+!.env.example
 .idea/
 *.iml
+node_modules/
+.kotlin/

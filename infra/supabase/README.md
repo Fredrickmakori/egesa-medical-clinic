@@ -24,6 +24,14 @@ Use these values to configure `CloudSyncConfig` in the shared module and impleme
 Run SQL files in this sequence from Supabase SQL Editor or CLI migrations:
 1. `infra/supabase/schema.sql`
 2. `infra/supabase/migrations/202605010001_billing_and_payments.sql`
+3. `infra/supabase/migrations/001_add_rbac_and_sync.sql`
+4. `infra/supabase/migrations/002_staff_and_rbac.sql`
+5. `infra/supabase/migrations/202605180001_domain_code_tables_and_constraints.sql`
+6. `infra/supabase/migrations/202605180001_core_clinical_tables.sql`
+7. `infra/supabase/migrations/202605180001_mch_ccc_ncd_extensions.sql`
+8. `infra/supabase/migrations/202605180001_reporting_pipeline.sql`
+9. `infra/supabase/migrations/202605290001_backend_persistence_foundation.sql`
+10. `infra/supabase/migrations/202606040001_current_app_schema_catchup.sql`
 
 ## Rollback notes
 If you need to rollback `202605010001_billing_and_payments.sql`, run in reverse dependency order:

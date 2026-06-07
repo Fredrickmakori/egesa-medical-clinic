@@ -14,8 +14,8 @@ create table if not exists public.clinical_register_entries (
   created_at timestamptz not null default now()
 );
 
-create index if not exists idx_register_entries_month
-  on public.clinical_register_entries ((to_char(encounter_date, 'YYYY-MM')));
+create index if not exists idx_register_entries_encounter_date
+  on public.clinical_register_entries (encounter_date);
 create index if not exists idx_register_entries_register_code
   on public.clinical_register_entries (register_code);
 

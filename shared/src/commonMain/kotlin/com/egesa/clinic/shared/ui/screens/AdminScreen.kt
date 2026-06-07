@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.egesa.clinic.shared.*
 import com.egesa.clinic.shared.data.LocalRepository
+import com.egesa.clinic.shared.ui.components.ClinicDropdownField
 import com.egesa.clinic.shared.ui.components.DestructiveTextButton
 import com.egesa.clinic.shared.ui.components.ModuleHeader
 import com.egesa.clinic.shared.ui.components.QuickActionButton
@@ -59,14 +60,49 @@ fun AdminScreen(localRepository: LocalRepository) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Monthly MOH Reporting", style = MaterialTheme.typography.titleMedium)
-                OutlinedTextField(value = reportType, onValueChange = { reportType = it }, label = { Text("Report view") })
+                ClinicDropdownField(
+                    value = reportType,
+                    onValueChange = { reportType = it },
+                    label = "Report view",
+                    options = listOf(
+                        "moh204_monthly_opd",
+                        "moh405_monthly_anc",
+                        "moh333_monthly_maternity",
+                        "moh361b_monthly_ccc",
+                        "moh272_273_monthly_ncd"
+                    ),
+                    displayFormatter = { code ->
+                        when (code) {
+                            "moh204_monthly_opd" -> "MOH 204 (Monthly OPD)"
+                            "moh405_monthly_anc" -> "MOH 405 (Monthly ANC)"
+                            "moh333_monthly_maternity" -> "MOH 333 (Monthly Maternity)"
+                            "moh361b_monthly_ccc" -> "MOH 361B (Monthly CCC)"
+                            "moh272_273_monthly_ncd" -> "MOH 272/273 (Monthly NCD)"
+                            else -> code
+                        }
+                    }
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = fromMonth, onValueChange = { fromMonth = it }, label = { Text("From (YYYY-MM)") }, modifier = Modifier.weight(1f))
                     OutlinedTextField(value = toMonth, onValueChange = { toMonth = it }, label = { Text("To (YYYY-MM)") }, modifier = Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = department, onValueChange = { department = it }, label = { Text("Department filter") }, modifier = Modifier.weight(1f))
-                    OutlinedTextField(value = program, onValueChange = { program = it }, label = { Text("Program filter") }, modifier = Modifier.weight(1f))
+                    ClinicDropdownField(
+                        value = department,
+                        onValueChange = { department = it },
+                        label = "Department filter",
+                        options = listOf("", "OPD", "ANC", "Maternity", "CCC", "NCD", "HTS", "Pharmacy", "Billing", "Admin"),
+                        modifier = Modifier.weight(1f),
+                        displayFormatter = { if (it.isBlank()) "All" else it }
+                    )
+                    ClinicDropdownField(
+                        value = program,
+                        onValueChange = { program = it },
+                        label = "Program filter",
+                        options = listOf("", "OPD", "ANC", "Maternity", "CCC", "NCD", "HTS"),
+                        modifier = Modifier.weight(1f),
+                        displayFormatter = { if (it.isBlank()) "All" else it }
+                    )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     QuickActionButton("JSON", onClick = { exportFormat = "json" })
@@ -261,7 +297,13 @@ fun StaffFormDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Full Name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = department, onValueChange = { department = it }, label = { Text("Department") }, modifier = Modifier.fillMaxWidth())
+                ClinicDropdownField(
+                    value = department,
+                    onValueChange = { department = it },
+                    label = "Department",
+                    options = listOf("OPD", "ANC", "Maternity", "CCC", "NCD", "HTS", "Pharmacy", "Billing", "Admin"),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 OutlinedTextField(
                     value = pin,
                     onValueChange = { pin = it },

@@ -16,13 +16,13 @@ object FakeRepository {
     /**
      * Enable local mock fallback for development and offline testing.
      */
-    var useMockFallback: Boolean = true
+    var useMockFallback: Boolean = false
 
     private var clinicApi: ClinicApi? = null
 
     fun clearAccessToken() = ClinicAuth.clearAccessToken()
 
-    fun restoreAccessToken(token: String?) = ClinicAuth.setAccessToken(token)
+    fun restoreAccessToken(token: String?) = ClinicAuth.setSession(token = token)
 
     /**
      * Source of truth for non-production builds is a seeded fixture so login works offline/demo-first.
@@ -43,10 +43,14 @@ object FakeRepository {
 
     // ── Staff ──────────────────────────────────────────────────────────────────
 
-    suspend fun login(staffId: String, pin: String): Result<LoginResponseDto> = runResultOrFallback(
+    suspend fun login(staffId: String, pin: String, tenantCode: String? = null): Result<LoginResponseDto> = runResultOrFallback(
         apiCall = {
-            val response = it.login(staffId, pin)
-            ClinicAuth.setAccessToken(response.accessToken)
+            val response = it.login(staffId, pin, tenantCode)
+            ClinicAuth.setSession(
+                token = response.accessToken,
+                facilityId = response.facilityId,
+                tenantCode = response.tenantCode
+            )
             response
         },
         fallback = {
@@ -56,15 +60,21 @@ object FakeRepository {
                 accessToken = "demo-token",
                 expiresAtEpochSeconds = (Clock.System.now().epochSeconds + 8 * 60 * 60),
                 role = UserRole.ADMIN.name,
-                staffName = "Demo User"
+                staffName = "Demo User",
+                facilityId = "default",
+                tenantCode = tenantCode
             )
-            ClinicAuth.setAccessToken(response.accessToken)
+            ClinicAuth.setSession(
+                token = response.accessToken,
+                facilityId = response.facilityId,
+                tenantCode = response.tenantCode
+            )
             response
         }
     )
 
     suspend fun validatePin(staffId: String, pin: String): Boolean {
-        return login(staffId, pin).isSuccess
+        return login(staffId, pin, ClinicAuth.tenantCode).isSuccess
     }
 
     suspend fun getPatients(): List<Patient> = apiOrFallback({

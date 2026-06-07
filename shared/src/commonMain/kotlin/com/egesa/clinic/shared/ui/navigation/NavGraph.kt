@@ -99,7 +99,11 @@ data class SessionState(
     val permissions: Set<Permission> = RolePermissionMap.permissionsFor(role),
     val token: String? = null,
     val syncStatus: SyncStatus = SyncStatus.IDLE,
-    val lastSyncTime: Long? = null
+    val lastSyncTime: Long? = null,
+    val facilityId: String = "default",
+    val tenantCode: String? = null,
+    val hospitalId: String = "",
+    val hospitalName: String = "Godspeed HMS",
 ) {
     val initials: String
         get() = fullName.split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString("").uppercase()

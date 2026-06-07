@@ -208,6 +208,17 @@ data class StaffMember(
     val department: String,
 )
 
+data class HospitalProfile(
+    val id: String,
+    val name: String,
+    val address: String,
+    val logoUri: String? = null,
+    val phone: String? = null,
+    val email: String? = null,
+    val registeredAt: String,
+    val isOnboarded: Boolean = false,
+)
+
 data class PatientVisitSummary(
     val patientId: String,
     val fullName: String,

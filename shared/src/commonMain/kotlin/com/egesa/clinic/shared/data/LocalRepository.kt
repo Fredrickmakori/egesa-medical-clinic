@@ -193,6 +193,42 @@ class LocalRepository(val database: ClinicDatabase) {
     private val dbQueries = database.clinicDatabaseQueries
     private val labRepository: LabRepository = LocalLabRepository(database)
 
+    // ── Hospital Profile ──────────────────────────────────────────────────
+
+    suspend fun getHospitalProfile(): HospitalProfile? {
+        return dbQueries.selectHospitalProfile().awaitAsOneOrNull()?.let {
+            HospitalProfile(
+                id = it.id,
+                name = it.name,
+                address = it.address,
+                logoUri = it.logoUri,
+                phone = it.phone,
+                email = it.email,
+                registeredAt = it.registeredAt,
+                isOnboarded = it.isOnboarded == 1L,
+            )
+        }
+    }
+
+    suspend fun saveHospitalProfile(profile: HospitalProfile) {
+        dbQueries.insertHospitalProfile(
+            id = profile.id,
+            name = profile.name,
+            address = profile.address,
+            logoUri = profile.logoUri,
+            phone = profile.phone,
+            email = profile.email,
+            registeredAt = profile.registeredAt,
+            isOnboarded = if (profile.isOnboarded) 1L else 0L,
+        )
+    }
+
+    suspend fun isOnboarded(): Boolean {
+        return getHospitalProfile()?.isOnboarded == true
+    }
+
+    // ── Staff ─────────────────────────────────────────────────────────────
+
     suspend fun getAllStaff(): List<StaffMember> {
         return dbQueries.selectAllStaff().awaitAsList().map {
             StaffMember(

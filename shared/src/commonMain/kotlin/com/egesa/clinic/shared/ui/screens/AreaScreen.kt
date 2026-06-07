@@ -1182,7 +1182,14 @@ private fun LegacyConsultationScreen(localRepository: LocalRepository, session: 
                             // 5. Outcome & Referral
                             Text("5. Outcome & Disposition", style = MaterialTheme.typography.titleMedium, color = Slate800, fontWeight = FontWeight.SemiBold)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(outcome, { outcome = it.uppercase() }, label = { Text("Outcome: DISCHARGED, REFERRED, ADMITTED") }, modifier = Modifier.weight(1f))
+                                ClinicDropdownField(
+                                    value = outcome,
+                                    onValueChange = { outcome = it },
+                                    label = "Outcome",
+                                    options = listOf("DISCHARGED", "REFERRED", "ADMITTED", "TRANSFERRED", "DECEASED"),
+                                    modifier = Modifier.weight(1f),
+                                    displayFormatter = { it }
+                                )
                                 OutlinedTextField(referralTo, { referralTo = it }, label = { Text("Referral to facility / department") }, modifier = Modifier.weight(1f))
                             }
 

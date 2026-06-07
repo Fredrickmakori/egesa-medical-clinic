@@ -1,8 +1,9 @@
 package com.egesa.clinic.shared.sync
 
 import com.egesa.clinic.shared.data.ClinicAuth
-import com.egesa.clinic.shared.data.FakeRepository
+import com.egesa.clinic.shared.data.ClinicApiProvider
 import com.egesa.clinic.shared.data.LocalRepository
+import com.egesa.clinic.shared.data.toDto
 
 object SyncUploader {
     suspend fun upload(
@@ -12,32 +13,31 @@ object SyncUploader {
         payload: String,
     ): Boolean {
         if (!ClinicAuth.hasToken()) return false
+        val api = ClinicApiProvider.api ?: return false
 
         return when (entityType) {
-            "PatientEntity" -> uploadPatient(localRepository, entityId)
+            "PatientEntity" -> uploadPatient(api, localRepository, entityId)
             "EncounterEntity",
             "VitalSignsEntity",
             "ServiceEventEntity",
             "PatientDocumentEntity",
-            "HtsRegisterEntity" -> uploadClinical(localRepository, entityType, entityId)
-            "LabOrderEntity", "LabSampleEntity", "LabResultEntity" -> {
-                // Local-first until lab sync payload contract is finalized.
-                payload.isNotBlank()
-            }
-            "ScheduleEntity", "SlotEntity", "AppointmentEntity" -> {
-                // Local-only scheduling data until server routes exist.
-                payload.isNotBlank()
-            }
+            "HtsRegisterEntity" -> uploadClinical(api, localRepository, entityType, entityId)
+            "LabOrderEntity" -> uploadLabOrder(api, localRepository, entityId)
             else -> false
         }
     }
 
-    private suspend fun uploadPatient(localRepository: LocalRepository, patientId: String): Boolean {
+    private suspend fun uploadPatient(
+        api: com.egesa.clinic.shared.data.ClinicApi,
+        localRepository: LocalRepository,
+        patientId: String
+    ): Boolean {
         val patient = localRepository.getPatientById(patientId) ?: return false
-        return FakeRepository.uploadPatientChanges(listOf(patient)).isSuccess
+        return runCatching { api.uploadPatientChanges(listOf(patient.toDto())) }.isSuccess
     }
 
     private suspend fun uploadClinical(
+        api: com.egesa.clinic.shared.data.ClinicApi,
         localRepository: LocalRepository,
         entityType: String,
         entityId: String,
@@ -51,6 +51,15 @@ object SyncUploader {
         ) {
             return false
         }
-        return FakeRepository.uploadClinicalChanges(batch).isSuccess
+        return runCatching { api.uploadClinicalChanges(batch) }.isSuccess
+    }
+
+    private suspend fun uploadLabOrder(
+        api: com.egesa.clinic.shared.data.ClinicApi,
+        localRepository: LocalRepository,
+        orderId: String
+    ): Boolean {
+        val order = localRepository.getLabOrder(orderId) ?: return false
+        return runCatching { api.createLabOrder(order.toDto()) }.isSuccess
     }
 }

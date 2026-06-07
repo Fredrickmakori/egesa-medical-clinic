@@ -14,7 +14,8 @@ import kotlin.time.Duration.Companion.hours
 @Serializable
 data class LoginRequest(
     val staffId: String,
-    val pin: String
+    val pin: String,
+    val tenantCode: String? = null
 )
 
 @Serializable
@@ -22,23 +23,27 @@ data class LoginResponse(
     val accessToken: String,
     val expiresAtEpochSeconds: Long,
     val role: String,
-    val staffName: String
+    val staffName: String,
+    val facilityId: String,
+    val tenantCode: String? = null
 )
 
 data class AuthUser(
     val id: String,
     val name: String,
     val role: UserRole,
-    val pin: String
+    val pin: String,
+    val facilityId: String = "default",
+    val tenantCode: String? = null
 )
 
 object AuthStore {
     private val users = listOf(
-        AuthUser("AD-001", "Admin User", UserRole.ADMIN, "8357"),
-        AuthUser("DR-001", "Dr. James Kamau", UserRole.DOCTOR, "2211"),
-        AuthUser("NR-001", "Nurse Faith Wanjiku", UserRole.NURSE, "1144"),
-        AuthUser("PH-001", "Pharmacist Brian Otieno", UserRole.PHARMACIST, "6677"),
-        AuthUser("RC-001", "Mary Otieno", UserRole.RECEPTIONIST, "9911")
+        AuthUser("AD-001", "Admin User", UserRole.ADMIN, "8357", "default"),
+        AuthUser("DR-001", "Dr. James Kamau", UserRole.DOCTOR, "2211", "default"),
+        AuthUser("NR-001", "Nurse Faith Wanjiku", UserRole.NURSE, "1144", "default"),
+        AuthUser("PH-001", "Pharmacist Brian Otieno", UserRole.PHARMACIST, "6677", "default"),
+        AuthUser("RC-001", "Mary Otieno", UserRole.RECEPTIONIST, "9911", "default")
     ).associateBy { it.id }
 
     fun verify(staffId: String, pin: String): AuthUser? = users[staffId]?.takeIf { it.pin == pin }
@@ -61,10 +66,19 @@ object JwtConfig {
             .withSubject(user.id)
             .withClaim("role", user.role.name)
             .withClaim("name", user.name)
+            .withClaim("facility_id", user.facilityId)
+            .withClaim("tenant_code", user.tenantCode)
             .withIssuedAt(java.util.Date(now.toEpochMilliseconds()))
             .withExpiresAt(java.util.Date(exp.toEpochMilliseconds()))
             .sign(algorithm)
-        return LoginResponse(token, exp.epochSeconds, user.role.name, user.name)
+        return LoginResponse(
+            accessToken = token,
+            expiresAtEpochSeconds = exp.epochSeconds,
+            role = user.role.name,
+            staffName = user.name,
+            facilityId = user.facilityId,
+            tenantCode = user.tenantCode
+        )
     }
 
     fun verifier() = JWT.require(algorithm).withIssuer(issuer).withAudience(audience).build()
@@ -73,6 +87,8 @@ object JwtConfig {
 fun JWTPrincipal.role(): String? = payload.getClaim("role")?.asString()
 fun JWTPrincipal.userId(): String? = payload.subject
 fun JWTPrincipal.name(): String? = payload.getClaim("name")?.asString()
+fun JWTPrincipal.facilityId(): String = payload.getClaim("facility_id")?.asString() ?: "default"
+fun JWTPrincipal.tenantCode(): String? = payload.getClaim("tenant_code")?.asString()
 
 fun Instant.toEpochSeconds(): Long = epochSeconds
 

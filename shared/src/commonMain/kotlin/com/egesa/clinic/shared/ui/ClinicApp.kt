@@ -1,6 +1,7 @@
 package com.egesa.clinic.shared.ui
 
 import androidx.compose.runtime.*
+import com.egesa.clinic.shared.data.ClinicApiProvider
 import com.egesa.clinic.shared.data.ClinicAuth
 import com.egesa.clinic.shared.data.FakeRepository
 import com.egesa.clinic.shared.data.KtorClinicApi
@@ -36,7 +37,8 @@ fun ClinicApp(
     uiMode: AppUiMode = AppUiMode.Adaptive,
     databaseDriverFactory: DatabaseDriverFactory,
     apiBaseUrl: String? = null,
-    allowMockFallback: Boolean = true,
+    tenantCode: String? = null,
+    allowMockFallback: Boolean = false,
     documentCaptureGateway: DocumentCaptureGateway = NoopDocumentCaptureGateway,
 ) {
     var localRepository by remember { mutableStateOf<LocalRepository?>(null) }
@@ -65,6 +67,10 @@ fun ClinicApp(
                 ClinicAuth.accessToken?.let { token ->
                     header("Authorization", "Bearer $token")
                 }
+                header("X-Facility-Id", ClinicAuth.facilityId)
+                ClinicAuth.tenantCode?.let { code ->
+                    header("X-Tenant-Code", code)
+                }
             }
         }
         
@@ -83,9 +89,13 @@ fun ClinicApp(
         }
         
         val api = KtorClinicApi(httpClient, baseUrl)
+        ClinicApiProvider.install(api)
         FakeRepository.installClinicApi(api)
-        
-        // Note: FakeRepository is configured to use mock fallback by default in FakeRepository.kt.
+        ClinicAuth.setSession(
+            token = ClinicAuth.accessToken,
+            facilityId = ClinicAuth.facilityId,
+            tenantCode = tenantCode ?: ClinicAuth.tenantCode
+        )
     }
 
     if (localRepository == null) {
@@ -98,7 +108,11 @@ fun ClinicApp(
 
         LaunchedEffect(session?.staffId, session?.token) {
             val staffId = session?.staffId ?: return@LaunchedEffect
-            ClinicAuth.setAccessToken(session?.token)
+            ClinicAuth.setSession(
+                token = session?.token,
+                facilityId = session?.facilityId ?: "default",
+                tenantCode = session?.tenantCode
+            )
             val repository = localRepository ?: return@LaunchedEffect
             val syncManager = SyncManager(repository)
 
@@ -137,6 +151,7 @@ fun ClinicApp(
                 documentCaptureGateway = documentCaptureGateway,
                 onLogout = {
                     FakeRepository.clearAccessToken()
+                    ClinicApiProvider.clear()
                     session = null
                 },
             )

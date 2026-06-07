@@ -4,9 +4,22 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-dependencies {
-    implementation(project(":shared"))
-    implementation(compose.desktop.currentOs)
+kotlin {
+    jvmToolchain(21)
+    jvm()
+
+    sourceSets {
+        jvmMain.dependencies {
+            implementation(project(":shared"))
+            implementation(compose.desktop.currentOs)
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.ui)
+            @Suppress("DEPRECATION")
+            implementation(compose.material3)
+            implementation(libs.logback.classic)
+        }
+    }
 }
 
 compose.desktop {

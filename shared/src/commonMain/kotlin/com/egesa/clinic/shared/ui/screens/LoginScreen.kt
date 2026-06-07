@@ -26,9 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.egesa.clinic.shared.UserRole
 import com.egesa.clinic.shared.StaffMember
+import com.egesa.clinic.shared.data.ClinicApiProvider
 import com.egesa.clinic.shared.data.ClinicAuth
-import com.egesa.clinic.shared.data.FakeRepository
 import com.egesa.clinic.shared.data.LocalRepository
+import com.egesa.clinic.shared.data.toDomain
 import com.egesa.clinic.shared.ui.components.RoleBadge
 import com.egesa.clinic.shared.ui.navigation.SessionState
 import com.egesa.clinic.shared.ui.theme.*
@@ -52,12 +53,18 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
     var staffLoadError by remember { mutableStateOf<String?>(null) }
     var reloadToken by remember { mutableStateOf(0) }
     var manualMode by remember { mutableStateOf(false) }
+    var tenantCode by remember { mutableStateOf(ClinicAuth.tenantCode.orEmpty()) }
 
-    LaunchedEffect(reloadToken) {
+    LaunchedEffect(reloadToken, tenantCode) {
+        ClinicAuth.setSession(
+            token = ClinicAuth.accessToken,
+            facilityId = ClinicAuth.facilityId,
+            tenantCode = tenantCode.trim().ifBlank { null }
+        )
         loadingStaff = true
         staffLoadError = null
         try {
-            val apiStaff = FakeRepository.getStaff()
+            val apiStaff = ClinicApiProvider.api?.getStaff()?.map { it.toDomain() } ?: emptyList()
             val localStaff = localRepository.getAllStaff()
             allStaff = (apiStaff + localStaff).distinctBy { it.id }
         } catch (_: Exception) {
@@ -100,19 +107,29 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                 error = null
                 scope.launch {
                     try {
-                        val result = FakeRepository.login(staff.id, pin)
-                        val response = result.getOrElse {
+                        val api = ClinicApiProvider.api
+                        if (api == null) {
+                            error = "Server connection is not configured"
+                            return@launch
+                        }
+                        val response = runCatching { api.login(staff.id, pin, ClinicAuth.tenantCode) }.getOrElse {
                             error = it.message?.takeIf { message -> message.isNotBlank() } ?: "Invalid credentials"
                             return@launch
                         }
-                        ClinicAuth.setAccessToken(response.accessToken)
+                        ClinicAuth.setSession(
+                            token = response.accessToken,
+                            facilityId = response.facilityId,
+                            tenantCode = response.tenantCode
+                        )
                         onLogin(
                             SessionState(
                                 staffId = staff.id,
                                 fullName = response.staffName.ifBlank { staff.fullName },
                                 role = runCatching { UserRole.valueOf(response.role) }.getOrDefault(staff.role),
                                 shiftLabel = "Day shift",
-                                token = response.accessToken
+                                token = response.accessToken,
+                                facilityId = response.facilityId,
+                                tenantCode = response.tenantCode
                             )
                         )
                     } finally {
@@ -133,6 +150,12 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (picked == null) {
+                    TenantCodeEntry(
+                        tenantCode = tenantCode,
+                        onTenantCodeChange = { tenantCode = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
                     if (manualMode || (allStaff.isEmpty() && !loadingStaff)) {
                         ManualStaffIdEntry(
                             staffId = manualStaffId,
@@ -175,6 +198,12 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f).fillMaxHeight().padding(16.dp), contentAlignment = Alignment.Center) {
                         if (picked == null) {
+                            TenantCodeEntry(
+                                tenantCode = tenantCode,
+                                onTenantCodeChange = { tenantCode = it },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(8.dp))
                             if (manualMode || (allStaff.isEmpty() && !loadingStaff)) {
                                 ManualStaffIdEntry(
                                     staffId = manualStaffId,
@@ -259,6 +288,12 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
                         contentAlignment = Alignment.Center,
                     ) {
                         if (picked == null) {
+                            TenantCodeEntry(
+                                tenantCode = tenantCode,
+                                onTenantCodeChange = { tenantCode = it },
+                                modifier = Modifier.width(400.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
                             if (manualMode || (allStaff.isEmpty() && !loadingStaff)) {
                                 ManualStaffIdEntry(
                                     staffId = manualStaffId,
@@ -298,6 +333,34 @@ fun LoginScreen(localRepository: LocalRepository, onLogin: (SessionState) -> Uni
 }
 
 // ── Staff selector with search ─────────────────────────────────────────────────
+
+@Composable
+private fun TenantCodeEntry(
+    tenantCode: String,
+    onTenantCodeChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = tenantCode,
+        onValueChange = { raw ->
+            onTenantCodeChange(raw.lowercase().replace(" ", "").take(32))
+        },
+        modifier = modifier,
+        singleLine = true,
+        label = { Text("Hospital Code", fontSize = 12.sp, color = Navy200) },
+        placeholder = { Text("e.g. central-hospital", fontSize = 12.sp, color = Navy200) },
+        shape = RoundedCornerShape(8.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = SidebarActive,
+            unfocusedContainerColor = SidebarActive,
+            focusedBorderColor = Teal500,
+            unfocusedBorderColor = SidebarBorder,
+            focusedTextColor = White,
+            unfocusedTextColor = White,
+            cursorColor = Teal500,
+        ),
+    )
+}
 
 @Composable
 private fun ManualStaffIdEntry(

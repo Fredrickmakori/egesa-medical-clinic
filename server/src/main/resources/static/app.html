@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClinicaSaaS Console - Hospital Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body class="console-body">
+    <!-- Console Navbar -->
+    <nav class="console-nav">
+        <div class="logo">
+            <i class="fa-solid fa-hospital-user logo-icon"></i>
+            <span>Clinica<span class="highlight">SaaS</span> <span class="badge console-badge">Console</span></span>
+        </div>
+        <div class="console-nav-actions">
+            <a href="index.html" class="nav-back"><i class="fa-solid fa-arrow-left-long"></i> Back to Home</a>
+            <div class="user-avatar" id="super-admin-toggle" title="Switch to Super Admin View">
+                <i class="fa-solid fa-user-shield"></i>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Workspace Container -->
+    <main class="console-container">
+        
+        <!-- ====================================================================
+             WIZARD: HOSPITAL ONBOARDING (Hidden by default, shown via query param)
+             ==================================================================== -->
+        <section id="onboarding-wizard" class="wizard-card glass-panel hidden">
+            <div class="wizard-header">
+                <h2>Register Your Hospital</h2>
+                <p>Follow the steps to configure your scalable clinic infrastructure.</p>
+                <div class="wizard-steps">
+                    <div class="step active" data-step="1"><span>1</span><label>Clinic Info</label></div>
+                    <div class="step" data-step="2"><span>2</span><label>Admin Setup</label></div>
+                    <div class="step" data-step="3"><span>3</span><label>Plan Select</label></div>
+                    <div class="step" data-step="4"><span>4</span><label>Billing & Checkout</label></div>
+                </div>
+            </div>
+
+            <div class="wizard-body">
+                <!-- Step 1: Hospital Info -->
+                <div class="wizard-step-content active" id="step-content-1">
+                    <h3>Hospital Information</h3>
+                    <p>Enter the basic profile details of your clinic or hospital facility.</p>
+                    <div class="form-group">
+                        <label for="hospital-name">Hospital / Clinic Name</label>
+                        <input type="text" id="hospital-name" placeholder="e.g., St. Jude General Hospital" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="hospital-code">Subdomain / Tenant Code</label>
+                            <input type="text" id="hospital-code" placeholder="e.g., stjude" required>
+                            <span class="help-text">This unique code identifies your hospital records in the DB.</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="hospital-email">Contact Email Address</label>
+                            <input type="email" id="hospital-email" placeholder="e.g., contact@stjude.org" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Admin Setup -->
+                <div class="wizard-step-content" id="step-content-2">
+                    <h3>System Administrator Account</h3>
+                    <p>Create the initial HIMS admin account. This account will have full access to add staff and configure logs.</p>
+                    <div class="form-group">
+                        <label for="admin-name">Full Name of Administrator</label>
+                        <input type="text" id="admin-name" placeholder="e.g., Dr. Alice Benson" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="admin-username">Admin Staff ID</label>
+                            <input type="text" id="admin-username" placeholder="e.g., AD-010" required>
+                            <span class="help-text">Must start with 'AD-' (e.g. AD-010).</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="admin-pin">Local Access PIN</label>
+                            <input type="password" id="admin-pin" maxlength="4" placeholder="4-digit PIN" required>
+                            <span class="help-text">Four digits (e.g. 1234) for local offline login.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Plan Select -->
+                <div class="wizard-step-content" id="step-content-3">
+                    <h3>Select Subscription Plan</h3>
+                    <p>Choose the level of clinical modules you require. You can upgrade or downgrade at any time.</p>
+                    <div class="plan-selector-grid">
+                        <div class="plan-select-card" data-plan="basic">
+                            <div class="radio-indicator"></div>
+                            <h4>Basic Plan</h4>
+                            <div class="price">$19<span>/mo</span></div>
+                            <p>Queue management + Standard consultations</p>
+                        </div>
+                        <div class="plan-select-card selected" data-plan="premium">
+                            <div class="radio-indicator"></div>
+                            <h4>Premium Plan</h4>
+                            <div class="price">$49<span>/mo</span></div>
+                            <p>EMR + Queue + Pharmacy inventory</p>
+                        </div>
+                        <div class="plan-select-card" data-plan="enterprise">
+                            <div class="radio-indicator"></div>
+                            <h4>Enterprise Plan</h4>
+                            <div class="price">$150<span>/mo</span></div>
+                            <p>Unlimited + Full Pharmacy + LIMS Labs module</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Billing & Checkout -->
+                <div class="wizard-step-content" id="step-content-4">
+                    <h3>Billing Checkout</h3>
+                    <p>Securely setup your subscription using MPesa STK Push or Credit Card.</p>
+                    
+                    <div class="payment-tabs">
+                        <button class="pay-tab active" data-method="mpesa"><i class="fa-solid fa-mobile-screen-button"></i> MPesa STK Push</button>
+                        <button class="pay-tab" data-method="card"><i class="fa-solid fa-credit-card"></i> Credit / Debit Card</button>
+                    </div>
+
+                    <div class="payment-details">
+                        <!-- Mpesa payment form -->
+                        <div class="payment-form active" id="form-mpesa">
+                            <div class="form-group">
+                                <label for="mpesa-number">Safaricom Mobile Number</label>
+                                <input type="tel" id="mpesa-number" placeholder="e.g., 254700000000" value="254700000000">
+                                <span class="help-text">An STK push request will be sent to this phone number to approve billing.</span>
+                            </div>
+                        </div>
+
+                        <!-- Card payment form -->
+                        <div class="payment-form" id="form-card">
+                            <div class="form-group">
+                                <label for="card-holder">Cardholder Name</label>
+                                <input type="text" id="card-holder" placeholder="Dr. Alice Benson">
+                            </div>
+                            <div class="form-group">
+                                <label for="card-num">Card Number</label>
+                                <input type="text" id="card-num" placeholder="4111 2222 3333 4444">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="card-exp">Expiration</label>
+                                    <input type="text" id="card-exp" placeholder="MM/YY">
+                                </div>
+                                <div class="form-group">
+                                    <label for="card-cvc">CVC</label>
+                                    <input type="text" id="card-cvc" placeholder="***">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="invoice-summary">
+                        <h4>Order Summary</h4>
+                        <div class="invoice-row">
+                            <span id="summary-plan-name">Premium Plan</span>
+                            <strong id="summary-plan-price">$49.00/mo</strong>
+                        </div>
+                        <div class="invoice-row total">
+                            <span>Total Due Today:</span>
+                            <strong id="summary-total-price">$49.00</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-footer">
+                <button id="btn-prev" class="btn btn-secondary hidden"><i class="fa-solid fa-chevron-left"></i> Previous</button>
+                <button id="btn-next" class="btn btn-primary">Next <i class="fa-solid fa-chevron-right"></i></button>
+                <button id="btn-finish" class="btn btn-primary hidden">Complete Registration & Pay <i class="fa-solid fa-circle-check"></i></button>
+            </div>
+
+            <!-- Loading indicator inside Wizard -->
+            <div id="wizard-loading" class="wizard-loading-overlay hidden">
+                <div class="spinner-container">
+                    <div class="spinner"></div>
+                    <div class="loading-message">Initializing database tables...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ====================================================================
+             PORTAL: CUSTOMER SUBSCRIPTION CONSOLE (Default View)
+             ==================================================================== -->
+        <section id="customer-dashboard" class="console-grid">
+            <!-- Left Side: Subscription Info & Launch -->
+            <div class="console-column">
+                <div class="card glass-panel info-card">
+                    <div class="card-header-simple">
+                        <h3><i class="fa-solid fa-hospital"></i> Hospital Dashboard</h3>
+                        <span class="status-pill active" id="sub-status">Active</span>
+                    </div>
+                    <div class="hospital-profile-summary">
+                        <h2 id="sub-hospital-name">Egesa Medical Clinic</h2>
+                        <p id="sub-hospital-code"><i class="fa-solid fa-server"></i> Subdomain Code: <code>egesa</code></p>
+                        <p id="sub-hospital-email"><i class="fa-solid fa-envelope"></i> Billing Email: <code>info@egesamedical.com</code></p>
+                    </div>
+                    <div class="hospital-action-box">
+                        <button id="btn-launch-hims" class="btn btn-primary btn-block btn-large">
+                            <i class="fa-solid fa-up-right-from-square"></i> Launch HIMS Application
+                        </button>
+                        <p class="btn-caption">Log in to this specific clinic instance using registered staff credentials.</p>
+                    </div>
+                </div>
+
+                <!-- Live Metrics (Dynamic) -->
+                <div class="card glass-panel">
+                    <h3><i class="fa-solid fa-chart-line"></i> Live Database Sizing</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-box">
+                            <span class="metric-val" id="metric-patients">0</span>
+                            <span class="metric-lbl">Patients Registered</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="metric-val" id="metric-staff">0</span>
+                            <span class="metric-lbl">Staff Directory</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="metric-val" id="metric-queue">0</span>
+                            <span class="metric-lbl">Active Queue Waitlist</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subscription Invoices -->
+                <div class="card glass-panel">
+                    <h3><i class="fa-solid fa-receipt"></i> Subscription Invoices</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Billing Date</th>
+                                    <th>Invoice ID</th>
+                                    <th>Plan</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invoice-list-body">
+                                <!-- Dynamic invoices -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Staff Management & Configuration -->
+            <div class="console-column">
+                <!-- Staff Manager -->
+                <div class="card glass-panel">
+                    <div class="card-header-simple">
+                        <h3><i class="fa-solid fa-users-gear"></i> Staff Member Accounts</h3>
+                        <button id="btn-show-add-staff" class="btn btn-secondary btn-small"><i class="fa-solid fa-user-plus"></i> Add Account</button>
+                    </div>
+                    <p class="description">Create and manage access keys for doctors, nurses, pharmacists, and receptionists for this hospital.</p>
+                    
+                    <!-- Add Staff Form (Modal/Hidden default) -->
+                    <div id="add-staff-container" class="add-staff-form-panel hidden">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="staff-name">Full Name</label>
+                                <input type="text" id="staff-name" placeholder="e.g., Nurse Jane Doe">
+                            </div>
+                            <div class="form-group">
+                                <label for="staff-role">Access Role</label>
+                                <select id="staff-role">
+                                    <option value="DOCTOR">Doctor (Clinician)</option>
+                                    <option value="NURSE">Nurse (Triage)</option>
+                                    <option value="PHARMACIST">Pharmacist</option>
+                                    <option value="RECEPTIONIST">Receptionist (Front Desk)</option>
+                                    <option value="ADMIN">System Admin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="staff-pin">4-Digit Login PIN</label>
+                                <input type="password" id="staff-pin" maxlength="4" placeholder="e.g., 5566">
+                            </div>
+                            <div class="form-group">
+                                <label for="staff-dept">Department</label>
+                                <input type="text" id="staff-dept" placeholder="e.g., OPD Clinic">
+                            </div>
+                        </div>
+                        <div class="add-staff-actions">
+                            <button id="btn-save-staff" class="btn btn-primary">Create Account</button>
+                            <button id="btn-cancel-staff" class="btn btn-outline">Cancel</button>
+                        </div>
+                    </div>
+
+                    <!-- Staff Directory Table -->
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Staff ID</th>
+                                    <th>Name</th>
+                                    <th>Role</th>
+                                    <th>Department</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="staff-list-body">
+                                <!-- Dynamic staff -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- HIMS Sandbox Configuration -->
+                <div class="card glass-panel">
+                    <h3><i class="fa-solid fa-gears"></i> Sandbox Configuration</h3>
+                    <div class="config-switches">
+                        <div class="config-row">
+                            <div class="config-info">
+                                <strong>Enable Real-Time Cloud Sync</strong>
+                                <p>Silently back up HIMS records to the remote Supabase database.</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="config-row">
+                            <div class="config-info">
+                                <strong>Restrict Access via IP Whitelists</strong>
+                                <p>Prevent clinical logging from unauthorized hospital WiFi networks.</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ====================================================================
+             PORTAL: SUPER ADMIN PLATFORM VIEW (Hidden by default)
+             ==================================================================== -->
+        <section id="super-admin-dashboard" class="console-column hidden">
+            <!-- Aggregate SaaS Info -->
+            <div class="card glass-panel primary-gradient">
+                <div class="aggregate-metrics">
+                    <div class="agg-box">
+                        <span class="label">Total SaaS Hospitals</span>
+                        <span class="value" id="saas-total-hospitals">0</span>
+                    </div>
+                    <div class="agg-box">
+                        <span class="label">Global Billing Revenue</span>
+                        <span class="value" id="saas-total-revenue">$0.00</span>
+                    </div>
+                    <div class="agg-box">
+                        <span class="label">Platform Sizing load</span>
+                        <span class="value">Excellent (4% DB size)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Hospitals List -->
+            <div class="card glass-panel">
+                <h3><i class="fa-solid fa-server"></i> Connected Multi-Tenant Hospital Directory</h3>
+                <p class="description">Global catalog of HIMS instances deployed on the shared Postgres/Ktor backend infrastructure.</p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Hospital Name</th>
+                                <th>Tenant Code</th>
+                                <th>Plan</th>
+                                <th>Billing Status</th>
+                                <th>Billed Revenue</th>
+                                <th>Registration Date</th>
+                                <th>Console Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="global-hospitals-body">
+                            <!-- Dynamic HIMS list -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Custom JS -->
+    <script src="js/portal.js"></script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClinicaSaaS - Next-Gen Scalable HIMS Platform</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body class="landing-body">
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <i class="fa-solid fa-hospital-user logo-icon"></i>
+                <span>Clinica<span class="highlight">SaaS</span></span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="/portal/app.html" class="btn btn-secondary">Console</a></li>
+                <li><a href="/portal/app.html?register=true" class="btn btn-primary">Get Started</a></li>
+            </ul>
+            <div class="mobile-toggle">
+                <i class="fa-solid fa-bars"></i>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-container">
+            <div class="hero-content">
+                <div class="badge"><i class="fa-solid fa-sparkles"></i> The Scalable Multi-Tenant HIMS</div>
+                <h1>Empower Your Hospital with a <span class="text-gradient">Modern Digital Brain</span></h1>
+                <p>Register your clinic in seconds, manage consultations, electronic health records (EMR), pharmacy inventory, laboratories, billing, and sync across mobile & desktop platforms.</p>
+                <div class="hero-actions">
+                    <a href="/portal/app.html?register=true" class="btn btn-primary btn-large">Register Your Hospital <i class="fa-solid fa-arrow-right"></i></a>
+                    <a href="#features" class="btn btn-outline btn-large">Explore Features</a>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="tenant-count">3+</span>
+                        <span class="stat-label">Hospitals Connected</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">10k+</span>
+                        <span class="stat-label">Patients Served</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">99.9%</span>
+                        <span class="stat-label">Cloud Sync Uptime</span>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="dashboard-mockup">
+                    <div class="mockup-header">
+                        <div class="dots"><span></span><span></span><span></span></div>
+                        <div class="url-bar">https://app.clinicasaas.com/egesa</div>
+                    </div>
+                    <div class="mockup-body">
+                        <div class="sidebar-mock">
+                            <div class="item active"></div>
+                            <div class="item"></div>
+                            <div class="item"></div>
+                            <div class="item"></div>
+                        </div>
+                        <div class="main-mock">
+                            <div class="grid-mock">
+                                <div class="card-mock">
+                                    <h4>Patients Registered</h4>
+                                    <div class="value">1,482</div>
+                                    <span class="trend"><i class="fa-solid fa-arrow-trend-up"></i> +12% this week</span>
+                                </div>
+                                <div class="card-mock">
+                                    <h4>Active Queue</h4>
+                                    <div class="value" style="color: var(--color-teal)">24</div>
+                                    <span class="trend">Average wait: 14 mins</span>
+                                </div>
+                            </div>
+                            <div class="chart-mock">
+                                <div class="bar" style="height: 40%"></div>
+                                <div class="bar" style="height: 60%"></div>
+                                <div class="bar" style="height: 85%"></div>
+                                <div class="bar" style="height: 50%"></div>
+                                <div class="bar" style="height: 75%"></div>
+                                <div class="bar" style="height: 95%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="section-header">
+            <h2>Complete Clinical Suite in One Portal</h2>
+            <p>Deploy enterprise-grade medical modules to any hospital clinic instantly with isolated tenant sandboxes.</p>
+        </div>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon-box"><i class="fa-solid fa-clipboard-user"></i></div>
+                <h3>Patient Registration & Queue</h3>
+                <p>Digital check-in workflows, real-time wait-list tracking, and automated triage classifications (1 to 5) linked directly to clinical consultation desks.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-box"><i class="fa-solid fa-file-medical"></i></div>
+                <h3>EMR & Consultations</h3>
+                <p>HIPAA-compliant consultation notes, vital signs logs, diagnosis coding, patient histories, and clinical prescriptions integrated securely.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-box"><i class="fa-solid fa-prescription-bottle-medical"></i></div>
+                <h3>Pharmacy & Inventory</h3>
+                <p>Real-time drug lookup, low stock alerts, lot number tracking, and automated dispensing records with an immutable transaction audit log.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-box"><i class="fa-solid fa-flask"></i></div>
+                <h3>LIMS Laboratory Portal</h3>
+                <p>Create lab orders, enter test values, trigger critical value notifications, track specimen collection status, and print professional reports.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-box"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                <h3>Billing & MPesa STK</h3>
+                <p>Generate medical bills, track invoice status, and request patient mobile payments automatically via integrated MPesa STK push notifications.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-box"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                <h3>Hybrid Offline-First Sync</h3>
+                <p>Work uninterrupted during internet blackouts. The system caches queries locally and performs automatic background conflict resolutions when online.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="pricing">
+        <div class="section-header">
+            <h2>Select Your Subscription Plan</h2>
+            <p>Flexible pricing tailored to clinics, regional hospitals, and large healthcare enterprises.</p>
+        </div>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <div class="card-header">
+                    <h3>Basic Plan</h3>
+                    <div class="price"><span>$19</span>/mo</div>
+                    <p>Best for small family clinics</p>
+                </div>
+                <ul class="plan-features">
+                    <li><i class="fa-solid fa-circle-check"></i> Up to 100 Patient Records</li>
+                    <li><i class="fa-solid fa-circle-check"></i> 5 Staff Member Accounts</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Consultation Notes & Triaging</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Standard Patient Queue</li>
+                    <li class="disabled"><i class="fa-solid fa-circle-xmark"></i> Pharmacy Inventory Tracking</li>
+                    <li class="disabled"><i class="fa-solid fa-circle-xmark"></i> LIMS Laboratory Module</li>
+                    <li class="disabled"><i class="fa-solid fa-circle-xmark"></i> MPesa STK Push Billing</li>
+                </ul>
+                <div class="card-footer">
+                    <a href="/portal/app.html?register=true&plan=basic" class="btn btn-outline">Choose Basic</a>
+                </div>
+            </div>
+            <div class="pricing-card popular">
+                <div class="popular-badge">Most Popular</div>
+                <div class="card-header">
+                    <h3>Premium Plan</h3>
+                    <div class="price"><span>$49</span>/mo</div>
+                    <p>Perfect for medium health centers</p>
+                </div>
+                <ul class="plan-features">
+                    <li><i class="fa-solid fa-circle-check"></i> Up to 1,000 Patient Records</li>
+                    <li><i class="fa-solid fa-circle-check"></i> 20 Staff Member Accounts</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Consultation Notes & Triaging</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Standard Patient Queue</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Pharmacy Inventory & Expiry Alerts</li>
+                    <li><i class="fa-solid fa-circle-check"></i> MPesa STK Push Billing</li>
+                    <li class="disabled"><i class="fa-solid fa-circle-xmark"></i> Full Laboratory LIMS</li>
+                </ul>
+                <div class="card-footer">
+                    <a href="/portal/app.html?register=true&plan=premium" class="btn btn-primary">Choose Premium</a>
+                </div>
+            </div>
+            <div class="pricing-card">
+                <div class="card-header">
+                    <h3>Enterprise Plan</h3>
+                    <div class="price"><span>$150</span>/mo</div>
+                    <p>Designed for large hospitals</p>
+                </div>
+                <ul class="plan-features">
+                    <li><i class="fa-solid fa-circle-check"></i> Unlimited Patient Records</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Unlimited Staff Member Accounts</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Consultation Notes & Triaging</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Standard Patient Queue</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Pharmacy Inventory & Expiry Alerts</li>
+                    <li><i class="fa-solid fa-circle-check"></i> MPesa STK Push Billing</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Full Laboratory LIMS Module</li>
+                    <li><i class="fa-solid fa-circle-check"></i> 24/7 Dedicated Priority Support</li>
+                </ul>
+                <div class="card-footer">
+                    <a href="/portal/app.html?register=true&plan=enterprise" class="btn btn-outline">Choose Enterprise</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Call to Action -->
+    <section class="cta">
+        <div class="cta-container">
+            <h2>Ready to transform your healthcare delivery?</h2>
+            <p>Join other hospitals currently optimizing their queues, EMR records, pharmacy stocks, and billing workflows.</p>
+            <a href="/portal/app.html?register=true" class="btn btn-primary btn-large">Get Started Now (Free 14-Day Trial)</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-logo">
+                <i class="fa-solid fa-hospital-user logo-icon"></i>
+                <span>Clinica<span class="highlight">SaaS</span></span>
+            </div>
+            <p>&copy; 2026 ClinicaSaaS Platform. All rights reserved. Built for modern medical clinic systems.</p>
+        </div>
+    </footer>
+
+    <!-- Custom JS -->
+    <script src="js/portal.js"></script>
+</body>
+</html>

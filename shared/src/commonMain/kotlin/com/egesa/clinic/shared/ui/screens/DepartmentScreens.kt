@@ -41,6 +41,7 @@ import com.egesa.clinic.shared.data.LocalRepository
 import com.egesa.clinic.shared.data.MedicationOrderInput
 import com.egesa.clinic.shared.data.PatientRegistrationInput
 import com.egesa.clinic.shared.data.ServiceEventInput
+import com.egesa.clinic.shared.ui.components.ClinicDropdownField
 import com.egesa.clinic.shared.ui.components.FormActionRow
 import com.egesa.clinic.shared.ui.components.HtsRegisterRow
 import com.egesa.clinic.shared.ui.navigation.SessionState
@@ -117,13 +118,26 @@ private fun EncounterCaptureForm(
                     OutlinedTextField(age, { age = it.filter { ch -> ch.isDigit() } }, label = { Text("Age") }, modifier = Modifier.weight(1f))
                 }
                 OutlinedTextField(fullName, { fullName = it }, label = { Text("Patient full name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(sex, { sex = it }, label = { Text("Sex: male, female, intersex, unknown") }, modifier = Modifier.fillMaxWidth())
+                ClinicDropdownField(
+                    value = sex,
+                    onValueChange = { sex = it },
+                    label = "Sex",
+                    options = listOf("male", "female", "intersex", "unknown"),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(primary, { primary = it }, label = { Text(primaryLabel) }, modifier = Modifier.weight(1f))
                     OutlinedTextField(secondary, { secondary = it }, label = { Text(secondaryLabel) }, modifier = Modifier.weight(1f))
                 }
                 OutlinedTextField(medication, { medication = it }, label = { Text("Prescription / medication") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(outcome, { outcome = it.uppercase() }, label = { Text("Outcome: DISCHARGED, REFERRED, ADMITTED") }, modifier = Modifier.fillMaxWidth())
+                ClinicDropdownField(
+                    value = outcome,
+                    onValueChange = { outcome = it },
+                    label = "Outcome",
+                    options = listOf("DISCHARGED", "REFERRED", "ADMITTED", "TRANSFERRED", "DECEASED"),
+                    modifier = Modifier.fillMaxWidth(),
+                    displayFormatter = { it }
+                )
 
                 FormActionRow(
                     cancelLabel = "Clear",
@@ -199,7 +213,13 @@ fun HtsForm(localRepository: LocalRepository, session: SessionState) {
                     OutlinedTextField(age, { age = it.filter { ch -> ch.isDigit() } }, label = { Text("Age") }, modifier = Modifier.weight(1f))
                 }
                 OutlinedTextField(fullName, { fullName = it }, label = { Text("Patient full name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(sex, { sex = it }, label = { Text("Sex") }, modifier = Modifier.fillMaxWidth())
+                ClinicDropdownField(
+                    value = sex,
+                    onValueChange = { sex = it },
+                    label = "Sex",
+                    options = listOf("male", "female", "intersex", "unknown"),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 HtsRegisterRow(entry = entry) { entry = it }
 
                 FormActionRow(
@@ -291,7 +311,16 @@ private fun PharmacyDispensingScreen(localRepository: LocalRepository, session: 
                         color = Slate700
                     )
                 }
-                OutlinedTextField(selectedEncounterId, { selectedEncounterId = it }, label = { Text("Encounter ID") }, modifier = Modifier.fillMaxWidth())
+                ClinicDropdownField(
+                    value = selectedEncounterId,
+                    onValueChange = { selectedEncounterId = it },
+                    label = "Encounter",
+                    options = visits.map { it.encounterId },
+                    modifier = Modifier.fillMaxWidth(),
+                    displayFormatter = { encId ->
+                        visits.find { it.encounterId == encId }?.let { "${it.encounterId} - ${it.fullName} (${it.department})" } ?: encId
+                    }
+                )
                 OutlinedTextField(medication, { medication = it }, label = { Text("Medication dispensed") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(quantity, { quantity = it.filter { ch -> ch.isDigit() } }, label = { Text("Quantity") }, modifier = Modifier.fillMaxWidth())
                 FormActionRow(

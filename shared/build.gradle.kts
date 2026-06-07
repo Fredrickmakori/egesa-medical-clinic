@@ -93,6 +93,7 @@ kotlin {
             }
         }
         androidMain.dependencies {
+            implementation(libs.androidx.core.ktx)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.sqldelight.android.driver)

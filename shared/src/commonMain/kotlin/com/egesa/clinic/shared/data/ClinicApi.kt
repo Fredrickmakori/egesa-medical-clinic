@@ -21,7 +21,7 @@ import io.ktor.http.contentType
 import kotlinx.serialization.Serializable
 
 interface ClinicApi {
-    suspend fun login(staffId: String, pin: String): LoginResponseDto
+    suspend fun login(staffId: String, pin: String, tenantCode: String? = null): LoginResponseDto
     suspend fun getStaff(): List<StaffMemberDto>
     suspend fun getPatients(): List<PatientDto>
     suspend fun getPatient(id: String): PatientDto?
@@ -54,9 +54,25 @@ interface ClinicApi {
     suspend fun getPatientEncounters(patientId: String): List<OpdEncounterBundle>
 }
 
+object ClinicApiProvider {
+    var api: ClinicApi? = null
+        private set
+
+    fun install(api: ClinicApi) {
+        this.api = api
+    }
+
+    fun clear() {
+        api = null
+    }
+}
+
 class KtorClinicApi(private val client: HttpClient, private val baseUrl: String) : ClinicApi {
-    override suspend fun login(staffId: String, pin: String): LoginResponseDto =
-        client.post("$baseUrl/auth/login") { contentType(ContentType.Application.Json); setBody(LoginRequestDto(staffId, pin)) }.body()
+    override suspend fun login(staffId: String, pin: String, tenantCode: String?): LoginResponseDto =
+        client.post("$baseUrl/auth/login") {
+            contentType(ContentType.Application.Json)
+            setBody(LoginRequestDto(staffId = staffId, pin = pin, tenantCode = tenantCode))
+        }.body()
 
     override suspend fun getStaff(): List<StaffMemberDto> = client.get("$baseUrl/auth/staff").body()
     override suspend fun getPatients(): List<PatientDto> = client.get("$baseUrl/patients").body()
@@ -126,13 +142,20 @@ class KtorClinicApi(private val client: HttpClient, private val baseUrl: String)
         client.get("$baseUrl/api/patients/$patientId/encounters").body()
 }
 
-@Serializable data class LoginRequestDto(val staffId: String, val pin: String)
+@Serializable
+data class LoginRequestDto(
+    val staffId: String,
+    val pin: String,
+    val tenantCode: String? = null
+)
 @Serializable
 data class LoginResponseDto(
     val accessToken: String,
     val expiresAtEpochSeconds: Long,
     val role: String,
-    val staffName: String
+    val staffName: String,
+    val facilityId: String = "default",
+    val tenantCode: String? = null
 )
 @Serializable data class StaffMemberDto(val id: String, val fullName: String, val role: String, val department: String)
 @Serializable data class PatientDto(

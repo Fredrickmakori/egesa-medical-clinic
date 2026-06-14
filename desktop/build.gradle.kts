@@ -1,7 +1,7 @@
 plugins {
-    kotlin("jvm")
-    id("org.jetbrains.compose")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.compose.compiler)
 }
 
 kotlin {
@@ -26,9 +26,4 @@ compose.desktop {
     application {
         mainClass = "com.egesa.clinic.desktop.MainKt"
     }
-}
-
-
-kotlin {
-    jvmToolchain(21)
 }

@@ -1,49 +1,30 @@
 package com.egesa.clinic.desktop
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import com.egesa.clinic.shared.EncounterForm
-import com.egesa.clinic.shared.HospitalState
-import com.egesa.clinic.shared.Shift
-import com.egesa.clinic.shared.WorkflowArea
+import com.egesa.clinic.shared.*
+import com.egesa.clinic.shared.data.DocumentCaptureGateway
+import com.egesa.clinic.shared.data.DocumentCaptureResult
+import com.egesa.clinic.shared.ui.navigation.navItemsFor
+import java.awt.FileDialog
+import java.awt.Frame
 import java.time.LocalDate
 
-private enum class OrdersBoardTab { LAB, IMAGING, PROCEDURES }
-private enum class OrderStatus(val label: String) {
+enum class OrdersBoardTab { LAB, IMAGING, PROCEDURES }
+enum class OrderStatus(val label: String) {
     PENDING("Pending"),
     COLLECTED("Collected"),
     PROCESSING("Processing"),
@@ -66,6 +47,8 @@ data class OrderItem(
     val reviewedBy: String? = null,
     val acknowledgedCritical: Boolean = false
 )
+
+enum class SaveState { DRAFT_SAVED, UNSAVED_CHANGES, FINAL_SIGN_OFF }
 
 fun main() = application {
     val state = remember { HospitalState() }
@@ -97,15 +80,16 @@ data class Transaction(
     val reason: String? = null
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DesktopAppShell(state: HospitalState) {
     var currentRole by remember { mutableStateOf(UserRole.ADMIN) }
-    val visibleNavItems = state.globalNavItemsFor(currentRole)
+    val visibleNavItems = navItemsFor(currentRole)
     var activeArea by remember { mutableStateOf(visibleNavItems.first().area) }
 
     Scaffold(
         topBar = {
-            SmallTopAppBar(
+            TopAppBar(
                 title = { Text("Egesa Hospital Management") },
                 actions = {
                     Text(state.globalActions().joinToString(" • ") { it.label }, Modifier.padding(end = 12.dp))
@@ -125,51 +109,57 @@ private fun DesktopAppShell(state: HospitalState) {
                 }
             }
 
-        if (activeArea == WorkflowArea.CONSULTATION) {
-            ConsultationWorkbench(state)
-        } else {
-            DefaultAreaView(state, activeArea)
+            Box(Modifier.fillMaxSize()) {
+                when (activeArea) {
+                    WorkflowArea.CONSULTATION -> ConsultationWorkbench(state)
+                    WorkflowArea.WARDS -> WardOperationsScreen(state)
+                    else -> DefaultAreaView(state, activeArea)
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun DefaultAreaView(state: HospitalState, activeArea: WorkflowArea) {
-    if (activeArea == WorkflowArea.ADMIN) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            state.metrics().forEach { metric ->
-                Card(Modifier.weight(1f)) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(metric.title)
-                        Text(metric.value, style = MaterialTheme.typography.headlineMedium)
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (activeArea == WorkflowArea.ADMIN) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                state.adminKpis().forEach { metric ->
+                    Card(Modifier.weight(1f)) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(metric.title)
+                            Text(metric.value, style = MaterialTheme.typography.headlineMedium)
+                        }
                     }
                 }
             }
         }
-    }
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(state.allPatients()) { patient ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("${patient.id} • ${patient.fullName}")
-                    Text("${patient.age} yrs, ${patient.sex}")
-                    Text("Status: ${patient.status}")
-                    patient.assignedWard?.let { Text("Ward: $it") }
+        Text("All Patients", style = MaterialTheme.typography.titleLarge)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(state.allPatients()) { patient ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("${patient.id} • ${patient.fullName}")
+                        Text("${patient.age} yrs, ${patient.sex}")
+                        Text("Status: ${patient.status}")
+                        patient.assignedWard?.let { Text("Ward: $it") }
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ConsultationWorkbench(state: HospitalState) {
     val patients = state.allPatients()
     var filterQuery by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf("All") }
-    var selectedPatient by remember { mutableStateOf(patients.first()) }
+    var selectedPatient by remember { mutableStateOf(patients.firstOrNull() ?: Patient("MOCK", "No Patients", 0, "Unknown", "None")) }
 
-    var form by remember { mutableStateOf(EncounterForm()) }
     var saveState by remember { mutableStateOf(SaveState.DRAFT_SAVED) }
 
     val filteredPatients = patients.filter {
@@ -178,34 +168,34 @@ private fun ConsultationWorkbench(state: HospitalState) {
         queryMatches && statusMatches
     }
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Card(Modifier.weight(1.1f).fillMaxSize()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Patients & Filters", style = MaterialTheme.typography.titleMedium)
-                OutlinedTextField(filterQuery, { filterQuery = it }, label = { Text("Search patient") }, modifier = Modifier.fillMaxWidth())
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("All", "consultation", "diagnosis", "Admitted").forEach { status ->
-                        Button(onClick = { statusFilter = status }) { Text(status) }
-                    }
+    Row(Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1.1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Patients & Filters", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(filterQuery, { filterQuery = it }, label = { Text("Search patient") }, modifier = Modifier.fillMaxWidth())
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("All", "consultation", "diagnosis", "Admitted").forEach { status ->
+                    Button(onClick = { statusFilter = status }) { Text(status) }
                 }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(filteredPatients) { patient ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().background(
-                                if (patient.id == selectedPatient.id) Color(0xFFE8F5E9) else Color.Transparent
-                            )
-                        ) {
-                            Column(Modifier.padding(10.dp)) {
-                                Text("${patient.id} • ${patient.fullName}")
-                                Text(patient.status)
-                                Button(onClick = { selectedPatient = patient }) { Text("Open") }
-                            }
+            }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(filteredPatients) { patient ->
+                    Card(
+                        onClick = { selectedPatient = patient },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (patient.id == selectedPatient.id) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(Modifier.padding(10.dp)) {
+                            Text("${patient.id} • ${patient.fullName}")
+                            Text(patient.status)
                         }
                     }
                 }
             }
         }
-        item {
+        
+        Column(Modifier.weight(1.3f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 state.adminKpis().drop(3).forEach { metric ->
                     Card(Modifier.weight(1f)) {
@@ -217,21 +207,16 @@ private fun ConsultationWorkbench(state: HospitalState) {
                     }
                 }
             }
-        }
-
-        if (activeArea == WorkflowArea.WARD) {
-            WardOperationsScreen(state)
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.allPatients()) { patient ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text("${patient.id} • ${patient.fullName}")
-                            Text("${patient.age} yrs, ${patient.sex}")
-                            Text("Status: ${patient.status}")
-                            patient.assignedWard?.let { Text("Ward: $it") }
-                        }
-                    }
+            
+            Card(Modifier.fillMaxWidth().weight(1f)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Selected Patient: ${selectedPatient.fullName}", style = MaterialTheme.typography.titleLarge)
+                    Text("Age: ${selectedPatient.age} | Sex: ${selectedPatient.sex}")
+                    Text("Active Diagnosis: ${selectedPatient.status}")
+                    
+                    Divider()
+                    
+                    Text("Workbench tools would go here...")
                 }
             }
         }
@@ -240,7 +225,7 @@ private fun ConsultationWorkbench(state: HospitalState) {
 
 @Composable
 private fun WardOperationsScreen(state: HospitalState) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { WardOverviewCard(state) }
         item { BedBoard(state) }
         item { AdmissionTransferDischargeFlow(state) }
@@ -267,7 +252,7 @@ private fun WardOverviewCard(state: HospitalState) {
 }
 
 @Composable
-private fun OverviewChip(label: String, value: String) {
+private fun RowScope.OverviewChip(label: String, value: String) {
     Card(Modifier.weight(1f)) {
         Column(Modifier.padding(8.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium)
@@ -279,70 +264,50 @@ private fun OverviewChip(label: String, value: String) {
 @Composable
 private fun BedBoard(state: HospitalState) {
     val beds = state.bedBoard()
+    var saveState by remember { mutableStateOf(SaveState.DRAFT_SAVED) }
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Bed Board", style = MaterialTheme.typography.titleMedium)
-        LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-            items(beds) { bed ->
-                Card(Modifier.padding(4.dp)) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("${bed.ward} • ${bed.roomBed}", style = MaterialTheme.typography.titleSmall)
-                        Text(bed.patientName)
-                        Text("Status: ${bed.status}")
-                        Text("Acuity: ${bed.acuity}")
-                        Text("Isolation: ${bed.isolation ?: "None"}")
+        
+        Box(Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+            LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize().padding(bottom = 4.dp)) {
+                items(beds) { bed ->
+                    Card(Modifier.padding(4.dp)) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("${bed.ward} • ${bed.roomBed}", style = MaterialTheme.typography.titleSmall)
+                            Text(bed.patientName)
+                            Text("Status: ${bed.status}")
+                            Text("Acuity: ${bed.acuity}")
+                            Text("Isolation: ${bed.isolation ?: "None"}")
+                            
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { saveState = SaveState.DRAFT_SAVED }) { Text("Save Draft") }
+                                Button(onClick = { saveState = SaveState.FINAL_SIGN_OFF }) { Text("Final") }
+                            }
+                        }
                     }
                 }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { saveState = SaveState.DRAFT_SAVED }) { Text("Save Draft") }
-                    Button(onClick = { saveState = SaveState.FINAL_SIGN_OFF }) { Text("Final Sign-off") }
-                }
-
-                val saveMessage = when (saveState) {
-                    SaveState.DRAFT_SAVED -> "Draft saved"
-                    SaveState.UNSAVED_CHANGES -> "Unsaved changes warning"
-                    SaveState.FINAL_SIGN_OFF -> "Final sign-off completed"
-                }
-                Text("Status: $saveMessage")
             }
         }
 
-        Card(Modifier.weight(1.3f).fillMaxSize()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Patient Summary", style = MaterialTheme.typography.titleMedium)
-                Text("${selectedPatient.fullName} (${selectedPatient.id})")
-                Text("${selectedPatient.age} yrs • ${selectedPatient.sex}")
-                Text("Visits: ${selectedPatient.visits}")
-                Text("Active diagnosis: ${selectedPatient.activeDiagnosis}")
-                Text("Current meds: ${selectedPatient.currentMedications.joinToString()}")
-                selectedPatient.assignedWard?.let { Text("Ward: $it") }
-
-                Text("Clinical Timeline", style = MaterialTheme.typography.titleSmall)
-                ClinicalTimeline(selectedPatient.timeline)
-            }
+        val saveMessage = when (saveState) {
+            SaveState.DRAFT_SAVED -> "Draft saved"
+            SaveState.UNSAVED_CHANGES -> "Unsaved changes warning"
+            SaveState.FINAL_SIGN_OFF -> "Final sign-off completed"
         }
+        Text("Status: $saveMessage", style = MaterialTheme.typography.labelSmall)
     }
 }
 
 @Composable
 private fun ClinicalTimeline(events: List<TimelineEvent>) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().height(420.dp)) {
-        items(events) { event ->
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        events.forEach { event ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(10.dp)) {
                     Text(event.title)
                     Text(event.details)
                     Text("${event.type.name.lowercase()} • ${event.timestamp}")
-                }
-            }
-        }
-
-        item { Text("Configuration", style = MaterialTheme.typography.titleMedium) }
-        items(state.configurationSets()) { config ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(config.title)
-                    Text(config.entries.joinToString(" • "))
                 }
             }
         }
@@ -392,11 +357,11 @@ private fun PrintableWardCensusAndHandoff(state: HospitalState) {
             state.wardCensus().forEach { row ->
                 Text("${row.ward}: ${row.occupiedBeds}/${row.totalBeds} occupied | High acuity ${row.highAcuityCount} | Isolation ${row.isolationCount}")
             }
-            Divider()
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Text("Shift Handoff Summary", style = MaterialTheme.typography.titleMedium)
-            Text("Day Shift")
+            Text("Day Shift", style = MaterialTheme.typography.labelLarge)
             state.shiftHandoffSummary(Shift.DAY).forEach { Text("• $it") }
-            Text("Night Shift")
+            Text("Night Shift", style = MaterialTheme.typography.labelLarge)
             state.shiftHandoffSummary(Shift.NIGHT).forEach { Text("• $it") }
         }
     }

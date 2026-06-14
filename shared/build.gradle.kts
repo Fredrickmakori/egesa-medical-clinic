@@ -1,17 +1,27 @@
 plugins {
-    kotlin("multiplatform")
-    id("com.android.library")
-    id("org.jetbrains.compose")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("app.cash.sqldelight")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.android.kotlin.multiplatform.library)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
     applyDefaultHierarchyTemplate()
-    androidTarget {
+    
+    android {
+        namespace = "com.egesa.clinic.shared"
+        compileSdk = 35
+        minSdk = 24
+        
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
     }
+
     jvm()
 
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
     wasmJs {
         browser {
             commonWebpackConfig {
@@ -71,26 +81,12 @@ kotlin {
             implementation(compose.components.resources)
             implementation(compose.materialIconsExtended)
         }
-        val jvmMain by getting {
-            dependencies {
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material3)
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
-                implementation("io.ktor:ktor-client-core:2.3.12")
-                implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
-                implementation("app.cash.sqldelight:runtime:2.0.2")
-                implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
-                implementation("app.cash.sqldelight:async-extensions:2.0.2")
-            }
+        jvmMain.dependencies {
+            implementation(libs.ktor.client.java)
+            implementation(libs.sqldelight.sqlite.driver)
         }
-        val commonTest by getting {
-            dependencies {
-                implementation(kotlin("test"))
-            }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
         }
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)
@@ -102,20 +98,6 @@ kotlin {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
         }
-        val desktopMain by getting {
-            dependencies {
-                implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
-                implementation("io.ktor:ktor-client-java:2.3.12")
-            }
-        }
-    }
-}
-
-android {
-    namespace = "com.egesa.clinic.shared"
-    compileSdk = 35
-    defaultConfig {
-        minSdk = 24
     }
 }
 

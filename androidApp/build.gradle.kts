@@ -1,9 +1,8 @@
 plugins {
-    id("com.android.application")
-    kotlin("android")
-    kotlin("plugin.serialization")
-    id("org.jetbrains.compose")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
@@ -16,7 +15,6 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        multiDexEnabled = true
     }
 
     buildFeatures {
@@ -24,18 +22,23 @@ android {
         buildConfig = true
     }
 
-    buildFeatures { compose = true }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
 dependencies {
     implementation(project(":shared"))
+    implementation(libs.androidx.activity.compose)
     implementation(compose.runtime)
     implementation(compose.foundation)
     implementation(compose.material3)
-    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation(compose.ui)
+    implementation(compose.components.resources)
 
     implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.4")
     implementation("io.github.jan-tennert.supabase:supabase-kt:2.5.4")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    implementation("io.ktor:ktor-client-android:2.3.12")
+    implementation(libs.kotlinx.serialization.json)
 }

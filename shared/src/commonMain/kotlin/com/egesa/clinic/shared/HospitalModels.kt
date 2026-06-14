@@ -115,6 +115,7 @@ data class RolePermissionMap(
 }
 
 enum class WorkflowArea {
+    DASHBOARD,
     RECEPTION,
     APPOINTMENTS,
     CONSULTATION,
@@ -144,6 +145,14 @@ enum class Shift {
     NIGHT
 }
 
+enum class TimelineEventType { NOTE, LAB, MEDICATION }
+data class TimelineEvent(
+    val title: String,
+    val details: String,
+    val type: TimelineEventType,
+    val timestamp: String
+)
+
 data class Patient(
     val id: String,
     val fullName: String,
@@ -153,7 +162,11 @@ data class Patient(
     val assignedWard: String? = null,
     val roomBed: String? = null,
     val acuity: String = "Moderate",
-    val isolation: String? = null
+    val isolation: String? = null,
+    val visits: Int = 0,
+    val timeline: List<TimelineEvent> = emptyList(),
+    val activeDiagnosis: String? = null,
+    val currentMedications: List<String> = emptyList()
 )
 
 data class DashboardMetric(
@@ -167,8 +180,7 @@ data class TrendPoint(
     val value: Int
 )
 
-data class Departmen
-tMetric(
+data class DepartmentMetric(
     val department: String,
     val throughput: Int,
     val avgTurnaroundMinutes: Int
@@ -290,6 +302,10 @@ data class NursingTask(
     val due: String,
     val priority: String
 )
+
+data class GlobalAction(val label: String)
+
+enum class StkRequestStatus { PENDING, SUCCESS, FAILED }
 
 data class WardCensusRow(
     val ward: String,
@@ -415,8 +431,6 @@ class HospitalState {
 
     fun wardCensus(): List<WardCensusRow> = emptyList()
 
-    fun shiftHandoffSummary(shift: Shift): List<String> = emptyList()
-
     fun globalActions(): List<GlobalAction> = listOf(
         GlobalAction("Search"),
         GlobalAction("Register Patient"),
@@ -446,6 +460,11 @@ class HospitalState {
             "Critical watchlist: PT-004, PT-011",
             "Pending diagnostics: 4 CBC, 2 blood cultures"
         )
+        Shift.NIGHT -> listOf(
+            "Stable night shift",
+            "Upcoming morning labs for PT-021"
+        )
+    }
 
     fun auditTrail(): List<AuditEvent> = auditEvents.toList()
 

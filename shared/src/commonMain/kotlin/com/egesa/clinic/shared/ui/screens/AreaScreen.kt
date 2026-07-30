@@ -157,25 +157,58 @@ private fun DashboardScreen(session: SessionState) {
             )
         }
 
-        // KPI grid â€” 3-column chunked Rows (no nested LazyGrid!)
+
+        item {
+            DashboardLayoutAuditCard(
+                missingComponents = listOf(
+                    MissingDashboardComponentUi(
+                        name = "Responsive two-column dashboard sections",
+                        impact = "Operational Queues, Quick Actions, Active Patients, and Ward Overview were fixed-width side-by-side rows that could look inconsistent on tablet and mobile widths.",
+                        recommendedFix = "Stack paired cards below 900.dp and reuse the same card spacing as module dashboards.",
+                        color = StatusInfo,
+                    ),
+                    MissingDashboardComponentUi(
+                        name = "Action routing for quick actions",
+                        impact = "Dashboard shortcuts are visible but disabled, so the command center does not yet provide direct register, appointment, invoice, or SMS workflows.",
+                        recommendedFix = "Wire each quick action to its owning module and enable role-aware navigation.",
+                        color = Amber700,
+                    ),
+                    MissingDashboardComponentUi(
+                        name = "Live data parity",
+                        impact = "Some command-center metrics still use static repository values while module pages increasingly use local repository data.",
+                        recommendedFix = "Promote dashboard KPIs, queues, and bottlenecks to shared repository-backed view models.",
+                        color = Rose700,
+                    ),
+                )
+            )
+        }
+
+        // KPI grid â€” responsive chunked Rows (no nested LazyGrid!)
         item {
             SectionHeader("Today's Overview")
             Spacer(Modifier.height(10.dp))
             val accentColors = listOf(Navy800, Teal700, StatusInfo, StatusStable, StatusWarning)
-            kpis!!.chunked(3).forEachIndexed { rowIdx, row ->
-                if (rowIdx > 0) Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEachIndexed { colIdx, m ->
-                        MetricCard(
-                            title       = m.title,
-                            value       = m.value,
-                            subtitle    = m.subtitle,
-                            accentColor = accentColors[(rowIdx * 3 + colIdx) % accentColors.size],
-                            modifier    = Modifier.weight(1f),
-                        )
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val columns = when {
+                    maxWidth < 560.dp -> 1
+                    maxWidth < 980.dp -> 2
+                    else -> 3
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    kpis!!.chunked(columns).forEachIndexed { rowIdx, row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            row.forEachIndexed { colIdx, m ->
+                                MetricCard(
+                                    title       = m.title,
+                                    value       = m.value,
+                                    subtitle    = m.subtitle,
+                                    accentColor = accentColors[(rowIdx * columns + colIdx) % accentColors.size],
+                                    modifier    = Modifier.weight(1f).heightIn(min = 132.dp),
+                                )
+                            }
+                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
                     }
-                    // Fill empty cells in last row
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -219,87 +252,122 @@ private fun DashboardScreen(session: SessionState) {
         }
 
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ClinicCard(Modifier.weight(1f)) {
-                    SectionHeader("Operational Queues")
-                    WorkflowQueueRow("Appointments", "Provider calendar and room allocations", "18 today", Sky700)
-                    HorizontalDivider(color = Slate100)
-                    WorkflowQueueRow("Lab / Imaging", "Orders awaiting sample/result updates", "9 open", Rose700)
-                    HorizontalDivider(color = Slate100)
-                    WorkflowQueueRow("Billing", "Invoices, M-Pesa, and insurance follow-up", "KES 42k", Amber700)
-                }
-                ClinicCard(Modifier.weight(1f)) {
-                    SectionHeader("Quick Actions")
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QuickActionButton("Register patient", Modifier.weight(1f), enabled = false)
-                        QuickActionButton("Book visit", Modifier.weight(1f), enabled = false)
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stackCards = maxWidth < 900.dp
+                if (stackCards) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OperationalQueuesCard(Modifier.fillMaxWidth())
+                        QuickActionsCard(Modifier.fillMaxWidth())
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QuickActionButton("Start invoice", Modifier.weight(1f), enabled = false)
-                        QuickActionButton("Send SMS", Modifier.weight(1f), enabled = false)
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OperationalQueuesCard(Modifier.weight(1f))
+                        QuickActionsCard(Modifier.weight(1f))
                     }
                 }
             }
         }
 
-        // Side-by-side: patients + ward overview
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Patient list (left)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SectionHeader("Active Patients")
-                    patients?.forEach { PatientCard(it) }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stackCards = maxWidth < 900.dp
+                if (stackCards) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        ActivePatientsSection(patients, Modifier.fillMaxWidth())
+                        WardHandoffSection(wardOv, handoff, Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        ActivePatientsSection(patients, Modifier.weight(1f))
+                        WardHandoffSection(wardOv, handoff, Modifier.weight(1f))
+                    }
                 }
+            }
+        }
+    }
+}
 
-                // Ward overview (right)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SectionHeader("Ward Overview")
-                    wardOv?.let { ward ->
-                        ClinicCard(Modifier.fillMaxWidth()) {
-                            // 3 stat tiles
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf(
-                                    Triple("Occupancy",  "${ward.occupancyPercent}%", Navy800),
-                                    Triple("Available",  "${ward.bedsAvailable}",     StatusStable),
-                                    Triple("Workload",   ward.nurseWorkload.take(7),  StatusInfo),
-                                ).forEach { (label, value, color) ->
-                                    Column(
-                                        Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).background(Slate50).padding(10.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                                    ) {
-                                        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
-                                        Text(label, style = MaterialTheme.typography.labelSmall, color = Slate500)
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            Text("Alerts", style = MaterialTheme.typography.titleSmall, color = Slate700)
-                            Spacer(Modifier.height(6.dp))
-                            ward.alerts.forEach { alert ->
-                                Row(
-                                    Modifier.padding(vertical = 3.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment     = Alignment.Top,
-                                ) {
-                                    StatusDot(StatusWarning, 7, Modifier.padding(top = 5.dp))
-                                    Text(alert, style = MaterialTheme.typography.bodySmall, color = Slate600)
-                                }
-                            }
+@Composable
+private fun OperationalQueuesCard(modifier: Modifier = Modifier) {
+    ClinicCard(modifier) {
+        SectionHeader("Operational Queues")
+        WorkflowQueueRow("Appointments", "Provider calendar and room allocations", "18 today", Sky700)
+        HorizontalDivider(color = Slate100)
+        WorkflowQueueRow("Lab / Imaging", "Orders awaiting sample/result updates", "9 open", Rose700)
+        HorizontalDivider(color = Slate100)
+        WorkflowQueueRow("Billing", "Invoices, M-Pesa, and insurance follow-up", "KES 42k", Amber700)
+    }
+}
+
+@Composable
+private fun QuickActionsCard(modifier: Modifier = Modifier) {
+    ClinicCard(modifier) {
+        SectionHeader("Quick Actions")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuickActionButton("Register patient", Modifier.weight(1f), enabled = false)
+            QuickActionButton("Book visit", Modifier.weight(1f), enabled = false)
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuickActionButton("Start invoice", Modifier.weight(1f), enabled = false)
+            QuickActionButton("Send SMS", Modifier.weight(1f), enabled = false)
+        }
+    }
+}
+
+@Composable
+private fun ActivePatientsSection(patients: List<Patient>?, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader("Active Patients")
+        patients?.forEach { PatientCard(it) }
+    }
+}
+
+@Composable
+private fun WardHandoffSection(wardOv: WardOverview?, handoff: List<String>?, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader("Ward Overview")
+        wardOv?.let { ward ->
+            ClinicCard(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        Triple("Occupancy", "${ward.occupancyPercent}%", Navy800),
+                        Triple("Available", "${ward.bedsAvailable}", StatusStable),
+                        Triple("Workload", ward.nurseWorkload.take(7), StatusInfo),
+                    ).forEach { (label, value, color) ->
+                        Column(
+                            Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).background(Slate50).padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = Slate500)
                         }
                     }
-
-                    Spacer(Modifier.height(4.dp))
-                    SectionHeader("Shift Handoff â€” Day")
-                    ClinicCard(Modifier.fillMaxWidth()) {
-                        handoff?.forEach { line ->
-                            Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                StatusDot(Navy700, 6, Modifier.padding(top = 5.dp))
-                                Text(line, style = MaterialTheme.typography.bodySmall, color = Slate700)
-                            }
-                        }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("Alerts", style = MaterialTheme.typography.titleSmall, color = Slate700)
+                Spacer(Modifier.height(6.dp))
+                ward.alerts.forEach { alert ->
+                    Row(
+                        Modifier.padding(vertical = 3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        StatusDot(StatusWarning, 7, Modifier.padding(top = 5.dp))
+                        Text(alert, style = MaterialTheme.typography.bodySmall, color = Slate600)
                     }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        SectionHeader("Shift Handoff - Day")
+        ClinicCard(Modifier.fillMaxWidth()) {
+            handoff?.forEach { line ->
+                Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusDot(Navy700, 6, Modifier.padding(top = 5.dp))
+                    Text(line, style = MaterialTheme.typography.bodySmall, color = Slate700)
                 }
             }
         }

@@ -362,15 +362,28 @@ fun ModuleKpiStrip(
     metrics: List<DashboardMetricUi>,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        metrics.forEach { metric ->
-            MetricCard(
-                title = metric.title,
-                value = metric.value,
-                subtitle = metric.subtitle,
-                accentColor = metric.color,
-                modifier = Modifier.weight(1f),
-            )
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val columns = when {
+            maxWidth < 560.dp -> 1
+            maxWidth < 980.dp -> 2
+            else -> 4
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            metrics.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { metric ->
+                        MetricCard(
+                            title = metric.title,
+                            value = metric.value,
+                            subtitle = metric.subtitle,
+                            accentColor = metric.color,
+                            modifier = Modifier.weight(1f).heightIn(min = 132.dp),
+                        )
+                    }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
         }
     }
 }
@@ -381,6 +394,44 @@ data class DashboardMetricUi(
     val subtitle: String? = null,
     val color: Color = Indigo700,
 )
+
+data class MissingDashboardComponentUi(
+    val name: String,
+    val impact: String,
+    val recommendedFix: String,
+    val color: Color = Amber700,
+)
+
+@Composable
+fun DashboardLayoutAuditCard(
+    missingComponents: List<MissingDashboardComponentUi>,
+    modifier: Modifier = Modifier,
+) {
+    ClinicCard(modifier.fillMaxWidth()) {
+        SectionHeader("Dashboard Layout Audit")
+        Text(
+            "Consistency check: KPI cards, queue cards, quick actions, and ward handoff should use the same responsive columns and expose the same operational shortcuts across dashboard modules.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Slate500,
+        )
+        Spacer(Modifier.height(12.dp))
+        missingComponents.forEachIndexed { index, component ->
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                StatusDot(component.color, 9, Modifier.padding(top = 5.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(component.name, style = MaterialTheme.typography.titleSmall, color = Slate900)
+                    Text(component.impact, style = MaterialTheme.typography.bodySmall, color = Slate600)
+                    Text("Fix: ${component.recommendedFix}", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                }
+            }
+            if (index < missingComponents.lastIndex) HorizontalDivider(color = Slate100)
+        }
+    }
+}
 
 @Composable
 fun WorkflowQueueRow(
